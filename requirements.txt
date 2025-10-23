@@ -1,0 +1,7 @@
+requests
+python-dotenv
+pandas
+matplotlib
+plotly
+seaborn
+notebook # Jupyter Notebook 실행을 위해 필요
