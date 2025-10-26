@@ -1,4 +1,17 @@
+# 환경 변수 및 가상환경
 .env
 .venv
-__pycache__
-.ipynb_checkpoints
+.venv/
+
+# 데이터 저장 폴더(실제 데이터와 테스트 데이터 분리)
+data/
+data_test/
+
+# Python 캐시 파일
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook 임시 파일
+.ipynb_checkpoints/
