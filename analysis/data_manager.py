@@ -24,7 +24,7 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     os.makedirs(folder_path, exist_ok=True)
 
     # JSON 응답을 분석하여 단일 DataFrame으로 변환
-    results = data.get('results', {})
+    results = data.get('results', [])
     all_data = []
 
     # 각 키워드 그룹(resluts 항목)의 데이터를 추출하여 all_date 리스트에 통합
@@ -125,15 +125,15 @@ def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
         except Exception as e:
             print(f"ERROR: {file} 로드 실패 - {e}")
 
-        if not df_list:
-            return pd.DataFrame()
+    if not df_list:
+        return pd.DataFrame()
         
-        merged = pd.concat(df_list, ignore_index=True)
-        merged = merged.groupby('date').mean(numeric_only=True).reset_index()
-        merged.sort_values('date', inplace=True)
+    merged = pd.concat(df_list, ignore_index=True)
+    merged = merged.groupby('date').mean(numeric_only=True).reset_index()
+    merged.sort_values('date', inplace=True)
 
-        print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
-        return merged
+    print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
+    return merged
     
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     '''
@@ -198,7 +198,7 @@ if __name__ == '__main__':
         if not df_loaded.empty:
             print("\n✅ 로드 성공. 로드된 데이터 구조 (상위 5개 행):")
             print(df_loaded.head().to_string(index=False))
-
+    '''
         # 테스트 후 생성된 파일과 폴더 정리
         try: 
             os.remove(saved_path)
@@ -206,3 +206,4 @@ if __name__ == '__main__':
                 os.rmdir('data_test')
         except OSError:
             pass
+    '''
