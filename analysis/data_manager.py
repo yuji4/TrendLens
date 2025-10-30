@@ -155,7 +155,19 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         df = df.dropna(subset=['date'])
     print(f"INFO: 클리닝 완료 (남은 행 수: {len(df)})")
     return df
+
+def summarize_data(df: pd.DataFrame):
+    '''
+    키워드별 평균, 최대, 최소값 요약 통계 출력
+    '''
+    if df.empty:
+        print("WARNING: 통계 계산할 데이터가 없습니다.")
+        return
     
+    print("\n📊 키워드별 통계 요약:")
+    numeric_cols = [c for c in df.columns if c != 'date']
+    summary = df[numeric_cols].agg(['mean', 'max', 'min']).T
+    print(summary.round(2))
     
 if __name__ == '__main__':
     print("--- Data Manager Module Test (더미 데이터 사용) ---")
