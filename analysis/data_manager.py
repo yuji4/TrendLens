@@ -135,6 +135,27 @@ def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
         print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
         return merged
     
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    기본적인 데이터 클리닝 수행
+    (1) 결측치 제거
+    (2) 이상치 처리
+    (3) 컬럼명 정리 
+    '''
+    if df.empty:
+        print("WARNING: 클리닝할 데이터가 없습니다.")
+        return df
+    
+    df = df.copy()
+    df.dropna(inplace=True)
+    df.columns = df.columns.str.strip().str.lower()
+
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df = df.dropna(subset=['date'])
+    print(f"INFO: 클리닝 완료 (남은 행 수: {len(df)})")
+    return df
+    
     
 if __name__ == '__main__':
     print("--- Data Manager Module Test (더미 데이터 사용) ---")
