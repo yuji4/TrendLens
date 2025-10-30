@@ -14,4 +14,5 @@ __pycache__/
 *.pyd
 
 # Jupyter Notebook 임시 파일
+Untitled*.ipynb
 .ipynb_checkpoints/
