@@ -103,6 +103,39 @@ def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
         print(f"ERROR: 최신 CSV 파일 로드 실패: {e}")
         return pd.DataFrame()
     
+def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
+    '''
+    폴더 내의 trend_data_*.csv 파일을 모두 병합하여 하나의 DataFrame으로 반환
+    중복된 날짜는 평균값으로 처리
+    '''
+    search_pattern = os.path.join(folder_path, "trend_data_*.csv")
+    file_list = glob.glob(search_pattern)
+
+    if not file_list:
+        print("WARNING: 병합할 CSV 파일이 없습니다.")
+        return pd.DataFrame()
+    
+    df_list = []
+    for file in file_list:
+        try:
+            df = pd.read_csv(file)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'])
+            df_list.append(df)
+        except Exception as e:
+            print(f"ERROR: {file} 로드 실패 - {e}")
+
+        if not df_list:
+            return pd.DataFrame()
+        
+        merged = pd.concat(df_list, ignore_index=True)
+        merged = merged.groupby('date').mean(numeric_only=True).reset_index()
+        merged.sort_values('date', inplace=True)
+
+        print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
+        return merged
+    
+    
 if __name__ == '__main__':
     print("--- Data Manager Module Test (더미 데이터 사용) ---")
 
