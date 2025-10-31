@@ -4,4 +4,5 @@ pandas
 matplotlib
 plotly
 seaborn
-notebook # Jupyter Notebook 실행을 위해 필요
+streamlit # 대시보드 UI
+apscheduler # 자동 업데이트 스케줄러
