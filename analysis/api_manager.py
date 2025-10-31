@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 # .env에서 환경 변수 로드
 load_dotenv()
 
-API_URL = "https://datalab.naver.com/openai/v1/datalab/search"
+API_URL = "https://openapi.naver.com/v1/datalab/search"
 
 def get_naver_api_keys():
     # .env 파일에서 네이버 DataLab API 키(Client ID, Client Secret) 불러오기
@@ -58,7 +58,7 @@ def get_naver_trend_data(keywords: list, start_date: str, end_date: str, time_un
     }
 
     headers = {
-        "X-Naver-Cliend-Id": client_id,
+        "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret,
         "Content-Type": "application/json"
     }
