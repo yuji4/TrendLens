@@ -9,7 +9,7 @@ from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_c
 
 # Streamlit 기본 설정
 st.set_page_config(page_title="네이버 검색 트렌드 분석", layout="wide")
-st.title("📈 네이버 검색 트렌드 분석 대시보드")
+st.title("👀 TrendLens: 네이버 검색 트렌드")
 
 # 사이드바 입력 영역
 with st.sidebar:
@@ -31,6 +31,23 @@ with st.sidebar:
     if gender_display == "남성": gender = "m"
     elif gender_display == "여성": gender = "f"
     else: gender = ""
+
+    st.divider()
+    st.subheader("📅 데이터 병합 및 정렬 옵션")
+
+    # 병합 옵션
+    align_option = st.radio(
+        "날짜 정렬 기준",
+        ["모든 날짜", "공통 날짜"],
+        index=0,
+        help="모든 날짜를 표시하거나, 모든 키워드에 값이 존재하는 날짜만 표시할 수 있습니다."
+    )
+
+    smooth_window = st.slider(
+        "이동평균(부드럽게)",
+        min_value=1, max_value=14, value=1, step=1,
+        help="값을 1보다 크게 하면 그래프가 부드럽게 표시됩니다."
+    )
 
     st.divider()
     colA, colB = st.columns(2)
@@ -80,6 +97,13 @@ if merge_btn:
         merged.to_csv(path, index=False)
         df = merged
         st.success(f"🗂 CSV 병합 완료 → {path}")
+
+if df is not None and not df.empty:
+    if align_option == "공통 날짜":
+         df = df.dropna(subset=[c for c in df.columns if c != "date"])
+    if smooth_window > 1:
+        tmp = df.set_index("date").rolling(window=smooth_window, min_periods=1).mean()
+        df = tmp.reset_index()
 
 # 대시보드 출력
 if df is not None and not df.empty:

@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import glob
 from datetime import datetime
+import re
 
 
 def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
@@ -102,10 +103,19 @@ def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
         print(f"ERROR: 최신 CSV 파일 로드 실패: {e}")
         return pd.DataFrame()
     
+def collapse_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    # 접미사 제거 후 같은 이름 컬럼은 평균으로 통합
+    new_cols = [re.sub(r'_dup(\.\d+)?$', '', c) for c in df.columns]
+    df = df.copy()
+    df.columns = new_cols 
+    if len(set(new_cols)) != len(new_cols): 
+        df = df.T.groupby(level=0).mean(numeric_only=True)
+    return df
+
 def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
     '''
     폴더 내의 trend_data_*.csv 파일을 모두 병합하여 하나의 DataFrame으로 반환
-    중복된 날짜는 평균값으로 처리
+    중복된 날짜는 평균값으로 처리, 동일 키워드는 평균 후 1개만 유지
     '''
     search_pattern = os.path.join(folder_path, "trend_data_*.csv")
     file_list = glob.glob(search_pattern)
@@ -114,23 +124,27 @@ def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
         print("WARNING: 병합할 CSV 파일이 없습니다.")
         return pd.DataFrame()
     
-    df_list = []
+    frames = []
     for file in file_list:
         try:
             df = pd.read_csv(file)
             if 'date' in df.columns:
                 df['date'] = pd.to_datetime(df['date'])
-            df_list.append(df)
+            frames.append(df)
         except Exception as e:
             print(f"ERROR: {file} 로드 실패 - {e}")
 
-    if not df_list:
+    if not frames:
         return pd.DataFrame()
-        
-    merged = pd.concat(df_list, ignore_index=True)
-    merged = merged.groupby('date').mean(numeric_only=True).reset_index()
-    merged.sort_values('date', inplace=True)
 
+    # ① 세로로 붙이고(열 정렬됨) ② 같은 날짜는 수치 컬럼 평균
+    merged = pd.concat(frames, ignore_index=True, sort=False)
+    merged = merged.groupby('date', as_index=False).mean(numeric_only=True)
+
+    # 전부 NaN인 열 제거 + 정렬
+    merged = merged.dropna(axis=1, how='all')
+    merged.sort_values('date', inplace=True)
+    
     print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
     return merged
     
