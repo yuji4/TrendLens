@@ -16,21 +16,25 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     반환값:
         str: 저장할 파일의 전체 경로(성공) or 빈 문자열(실패) 
     '''
-    if not data or 'results' not in data:
-        print("ERROR: 유효하지 않거나 비어 있는 데이터입니다.")
-        return ""
-    
-    # 'data/' 폴더 생성 확인 (없으면 생성)
     os.makedirs(folder_path, exist_ok=True)
 
+    # 타임스탬프 기반 파일명 생성 및 저장
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"trend_data_{timestamp}.csv"
+    file_path = os.path.join(folder_path, file_name)
+
+    # 유효성 검사
+    if not data or 'results' not in data:
+        print("ERROR: 유효하지 않거나 비어 있는 데이터입니다.")
+        return file_path
+
     # JSON 응답을 분석하여 단일 DataFrame으로 변환
-    results = data.get('results', [])
+    results = data['results']
     all_data = []
 
     # 각 키워드 그룹(results 항목)의 데이터를 추출하여 all_data 리스트에 통합
     for result in results:
         keyword_group = result['title']
-
         # 'data' 필드의 각 날짜/비율 항목을 처리
         for item in result['data']:
             row = {
@@ -42,7 +46,7 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
 
     if not all_data:
         print("ERROR: 추출된 데이터가 없습니다. JSON 응답 구조를 확인하세요.")
-        return ""
+        return file_path
 
     # DataFrame 생성 및 타입 변환
     df_raw = pd.DataFrame(all_data, columns=['date', 'keyword', 'ratio'])
@@ -55,19 +59,14 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
         columns='keyword',
         values='ratio'
     ).reset_index()
-
-    # 타임스탬프 기반 파일명 생성 및 저장
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"trend_data_{timestamp}.csv"
-    file_path = os.path.join(folder_path, file_name)
-
+ 
     try:
         df_pivot.to_csv(file_path, index=False, encoding="utf-8-sig")
         print(f"INFO: 데이터가 성공적으로 저장되었습니다. -> {file_path}")
-        return file_path
     except Exception as e:
         print(f"ERROR: CSV 파일 저장 실패: {e}")
-        return ""
+    
+    return file_path
         
 
 def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
