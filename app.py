@@ -98,27 +98,73 @@ if df is not None and not df.empty:
     with tab2:
         st.subheader("정규화 및 증감률 분석")
 
+        # 원본 데이터 준비
         df2 = df.copy()
         df2.set_index("date", inplace=True)
 
-        pct = df2.pct_change().reset_index().rename(
-            columns=lambda c: f"{c}_pct" if c != "date" else c
-        )
+        # 증감률 계산 (백분율 변환)
+        pct = df2.pct_change().reset_index()
+        pct.columns = [
+            "date" if c == "date" else f"{c}_증감률(&)" for c in pct.columns
+        ]
+        for c in pct.columns:
+            if c != "date":
+                pct[c] = (pct[c] * 100).round(2)
 
+        # 정규화
         scaled = df2.copy()
         for col in [c for c in df2.columns if c != "date"]:
             minv, maxv = scaled[col].min(), scaled[col].max()
             scaled[col] = (scaled[col] - minv) / (maxv - minv) if (maxv - minv) != 0 else 0
-        scaled = scaled.reset_index().rename(
-            columns=lambda c: f"{c}_scaled" if c != "date" else c
-        )
+        scaled = scaled.reset_index()
+        scaled.columns = ["date"] + [f"{c}_정규화(0~1)" for c in df2.columns]
 
+        # 통합 테이블
         df_combined = df.merge(pct, on="date", how="left").merge(scaled, on="date", how="left")
-        st.dataframe(df_combined, use_container_width=True)
+        
+        styled_df = df_combined.style.set_table_styles([
+            {'selector': 'th',
+            'props': [('font-size', '15px'),
+                      ('font-weight', 'bold'),
+                      ('background-color','#E3F2FD'),
+                      ('color', '#0D47A1')]},
+            {'selector': 'td',
+             'props': [('font-size', '13px'),
+                       ('color', '#212121')]}
+        ]).highlight_max(axis=0, color='#C5E1A5')
 
+        st.dataframe(styled_df, use_container_width=True, height=500)
+
+        # 증감률 그래프
+        pct_long = pct.melt(id_vars="date", var_name="keyword", value_name="change")
+        fig_change = px.bar(
+            pct_long,
+            x="date", y="change", color="keyword",
+            title="📊 일간 증감률(%) 변화",
+            barmode="group"
+        )
+        fig_change.update_layout(
+            plot_bgcolor='white',
+            font=dict(size=14),
+            xaxis_tickangle=-45,
+            legend_title_text="키워드"
+        )
+        st.plotly_chart(fig_change, use_container_width=True)
+
+        # 정규화 그래프
         df_scaled_long = scaled.melt(id_vars="date", var_name="metric", value_name="value")
-        fig2 = px.line(df_scaled_long, x="date", y="value", color="metric", title="정규화(0~1) 추세")
-        st.plotly_chart(fig2, use_container_width=True)
+        fig_scaled = px.line(
+            df_scaled_long,
+            x="date", y="value", color="metric",
+            title="정규화(0~1) 추세"  
+        )
+        fig_scaled.update_traces(line=dict(width=2.5))
+        fig_scaled.update_layout(
+            plot_bgcolor='white',
+            font=dict(size=14),
+            legend_title_text="정규화 키워드"
+        )
+        st.plotly_chart(fig_scaled, use_container_width=True)
 
     # 🔗 탭 3: 상관 분석
     with tab3:
