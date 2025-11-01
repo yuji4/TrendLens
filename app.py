@@ -26,6 +26,12 @@ with st.sidebar:
         format="YYYY-MM-DD",
     )
 
+    # 성별 선택
+    gender_display = st.selectbox("성별 선택", ["전체", "남성", "여성"])
+    if gender_display == "남성": gender = "m"
+    elif gender_display == "여성": gender = "f"
+    else: gender = ""
+
     st.divider()
     colA, colB = st.columns(2)
     with colA:
@@ -50,9 +56,10 @@ if update_btn:
                 start_date=str(start_date),
                 end_date=str(end_date),
                 time_unit=time_unit,
+                gender=gender,
             )
             if not data or "results" not in data:
-                st.error("데이터를 불러오지 못했습니다. 키워드 또는 API 키를 확인하세요.")
+                st.error("선택한 성별 조건에 대한 데이터가 없습니다.")
             else:
                 file_path = save_data_to_csv(data)
                 st.success(f"✅ 최신 데이터 저장 완료: {file_path}")

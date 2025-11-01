@@ -19,7 +19,13 @@ def get_naver_api_keys():
     
     return client_id, client_secret
 
-def get_naver_trend_data(keywords: list, start_date: str, end_date: str, time_unit: str = 'date') -> dict:
+def get_naver_trend_data(
+    keywords: list, 
+    start_date: str, 
+    end_date: str, 
+    time_unit: str = 'date',
+    gender: str = '',
+) -> dict:
     # 네이버 DataLab 검색 트렌드 API를 호출하여 데이터 가져오기
     '''
     매개변수:
@@ -27,6 +33,8 @@ def get_naver_trend_data(keywords: list, start_date: str, end_date: str, time_un
         start_date(str): 검색 시작 날짜. 포맷: "YYYY-MM-DD"
         end_date(str): 검색 종료 날짜. 포맷: "YYYY-MM-DD"
         time_unit(str): 데이터 단위. 'date', 'week', 'month' 중 하나 (기본값은 'date')
+        gender: 'm' (남성), 'f' (여성), 또는 '' (전체)
+        ages: ['10', '20', '30', ...] 형태의 문자열 리스트
 
     반환값:
         dict: API 응답 JSON 데이터. 오류 발생 시 딕셔너리 반환
@@ -39,6 +47,12 @@ def get_naver_trend_data(keywords: list, start_date: str, end_date: str, time_un
     if not (1 <= len(keywords) <= 5):
         print("ERROR: 키워드는 1개에서 5개 사이여야 합니다.")
         return {}
+    keywords = [k.strip() for k in keywords]
+    
+    if gender not in ['', 'm', 'f']:
+        print("WARNING: gender 값이 올바르지 않습니다.")
+        gender = ''
+
     
     # API 리퀘스트 본문 구성
     # 각 키워드를 별도의 그룹으로 처리하여 여러 트렌드를 동시 요청
@@ -53,8 +67,7 @@ def get_naver_trend_data(keywords: list, start_date: str, end_date: str, time_un
         "timeUnit": time_unit,
         "keywordGroups": keyword_groups,
         "device": "",
-        "gender": "",
-        "ages": []
+        "gender": gender
     }
 
     headers = {
@@ -65,9 +78,11 @@ def get_naver_trend_data(keywords: list, start_date: str, end_date: str, time_un
 
     try: 
         print(f"INFO: {len(keywords)}개의 키워드에 대한 데이터 요청 중: {keywords}")
+        print("요청 본문:", json.dumps(request_body, ensure_ascii=False, indent=2))
+        print("요청 헤더:", headers)
+
         response = requests.post(API_URL, headers=headers, json=request_body)
         response.raise_for_status()  # 200 이외의 상태 코드 시 예외 발생
-
         return response.json()
     
     except requests.exceptions.RequestException as e:
@@ -83,15 +98,20 @@ if __name__ == "__main__":
         print(f"Client ID 로드 성공: {client_id[:5]}...{client_id[-5:]}")
         
         # API 호출 테스트
-        test_keywords = ["커피", "차"]
+        test_keywords = ["아이폰", "겨울"]
         test_start = "2024-01-01"
         test_end = "2024-01-31"
+        test_gender = "f"
 
-        test_data = get_naver_trend_data(test_keywords, test_start, test_end)
+        test_data = get_naver_trend_data(
+            test_keywords, 
+            test_start, 
+            test_end, 
+            gender=test_gender,
+        )
 
         if test_data:
             print("\n✅ API 호출 성공 및 데이터 획득")
-            # 응답 일부 출력
             print("데이터 미리보기:")
             print(json.dumps(test_data, indent=2)[:500] + "...") 
         else:

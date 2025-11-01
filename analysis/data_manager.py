@@ -27,7 +27,7 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     results = data.get('results', [])
     all_data = []
 
-    # 각 키워드 그룹(resluts 항목)의 데이터를 추출하여 all_date 리스트에 통합
+    # 각 키워드 그룹(results 항목)의 데이터를 추출하여 all_data 리스트에 통합
     for result in results:
         keyword_group = result['title']
 
@@ -62,7 +62,7 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     file_path = os.path.join(folder_path, file_name)
 
     try:
-        df_pivot.to_csv(file_path, index=False)
+        df_pivot.to_csv(file_path, index=False, encoding="utf-8-sig")
         print(f"INFO: 데이터가 성공적으로 저장되었습니다. -> {file_path}")
         return file_path
     except Exception as e:
@@ -75,7 +75,7 @@ def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
     저장된 폴더에서 가장 최근에 저장된 CSV 파일을 DateFrame으로 로드
 
     매개변수:
-        folder_paht(str): CSV 파일이 저장된 폴더 경로 (기본값은 'data')
+        folder_path(str): CSV 파일이 저장된 폴더 경로 (기본값은 'data')
 
     반환값:
         pd.DataFrame: 최신 CSV 파일의 데이터. 파일을 찾지 못하면 빈 DataFrame 반환
@@ -89,8 +89,8 @@ def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
         print(f"WARNING: 폴더 내에서 CSV 파일(패턴: {search_pattern})을 찾을 수 없습니다.")
         return pd.DataFrame()
     
-    # 파일 이름 기준으로 정렬
-    latest_file = max(list_of_files)
+    # 파일 생성 시간 기준으로 정렬
+    latest_file = max(list_of_files, key=os.path.getctime)
 
     try:
         print(f"INFO: 최신 데이터를 로드합니다. -> {latest_file}")
@@ -164,10 +164,9 @@ def summarize_data(df: pd.DataFrame):
         print("WARNING: 통계 계산할 데이터가 없습니다.")
         return
     
-    print("\n📊 키워드별 통계 요약:")
     numeric_cols = [c for c in df.columns if c != 'date']
-    summary = df[numeric_cols].agg(['mean', 'max', 'min']).T
-    print(summary.round(2))
+    summary = df[numeric_cols].agg(['mean', 'max', 'min']).T.round(2)
+    return summary
     
 if __name__ == '__main__':
     print("--- Data Manager Module Test (더미 데이터 사용) ---")
