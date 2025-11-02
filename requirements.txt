@@ -6,3 +6,4 @@ plotly
 seaborn
 streamlit # 대시보드 UI
 apscheduler # 자동 업데이트 스케줄러
+networkx  # 상관 네트워크 그래프 시각화 

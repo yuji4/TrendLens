@@ -127,9 +127,9 @@ if df is not None and not df.empty:
         df2.set_index("date", inplace=True)
 
         # 증감률 계산 (백분율 변환)
-        pct = df2.pct_change().reset_index()
+        pct = df2.pct_change(fill_method=None).reset_index()
         pct.columns = [
-            "date" if c == "date" else f"{c}_증감률(&)" for c in pct.columns
+            "date" if c == "date" else f"{c}_증감률(%)" for c in pct.columns
         ]
         for c in pct.columns:
             if c != "date":
@@ -193,10 +193,72 @@ if df is not None and not df.empty:
     # 🔗 탭 3: 상관 분석
     with tab3:
         st.subheader("키워드 간 상관관계")
+
         corr = df.set_index("date").corr()
         st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), use_container_width=True)
+
         fig3 = px.imshow(corr, text_auto=True, aspect="auto", title="Correlation Heatmap")
         st.plotly_chart(fig3, use_container_width=True)
+
+        # 네트워크 그래프 추가
+        st.markdown("### 🕸️ 네트워크 상관관계 그래프")
+        import networkx as nx
+        import plotly.graph_objects as go
+
+        threshold = st.slider("상관계수 임계값", 0.0, 1.0, 0.6, 0.05)
+        G = nx.Graph()
+        for col in corr.columns:
+            G.add_node(col)
+        for i in corr.columns:
+            for j in corr.columns:
+                if i != j and abs(corr.loc[i, j]) >= threshold:
+                    G.add_edge(i, j, weight=corr.loc[i, j])
+        if len(G.edges)  == 0:
+            st.info(f"임계값 {threshold} 이상인 상관관계가 없습니다.")
+        else:
+            pos = nx.spring_layout(G, seed=42, k=0.5)  # 위치 계산(고정 랜덤 시드)
+
+            # plotly 그래프용 데이터 구성하기
+            edge_x, edge_y, edge_colors = [], [], []
+            for edge in G.edges(data=True):
+                x0, y0 = pos[edge[0]]
+                x1, y1 = pos[edge[1]]
+                edge_x += [x0, x1, None]
+                edge_y += [y0, y1, None]
+                edge_colors.append(edge[2]['weight'])
+
+            node_x, node_y = zip(*[pos[n] for n in G.nodes])
+            node_trace = go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers+text',
+                text=list(G.nodes),
+                textposition="top center",
+                hoverinfo="text",
+                marker=dict(
+                    size=18,
+                    color='skyblue',
+                    line=dict(width=2, color='DarkSlateGrey')
+                )
+            )
+
+            edge_trace = go.Scatter(
+                x=edge_x, y=edge_y,
+                mode='lines',
+                line=dict(width=2, color='LightGray'),
+                hoverinfo='none'
+            )
+
+            fig_network = go.Figure(data=[edge_trace, node_trace])
+            fig_network.update_layout(
+                title=f"키워드 네트워크 (|r| ≥ {threshold})",
+                showlegend=False,
+                hovermode='closest',
+                margin=dict(l=10, r=10, t=50, b=10),
+                xaxis=dict(showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(showgrid=False, zeroline=False, visible=False),
+                height=600,
+            )
+            st.plotly_chart(fig_network, use_container_width=True)
 
     # ⬇️ 탭 4: CSV 다운로드
     with tab4:
