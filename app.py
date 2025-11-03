@@ -1,11 +1,39 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 # 내부 모듈
 from analysis.api_manager import get_naver_trend_data
 from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
+
+last_update_time = st.session_state.get("last_update_time", None)
+
+def auto_update_job():
+    global last_update_time
+    try:
+        keywords = ["Python", "AI", "Study"]  # 기본 키워드
+        today = date.today()
+        start = today - timedelta(days=7)
+
+        data = get_naver_trend_data(
+            keywords=keywords,
+            start_date=str(start),
+            end_date=str(today),
+            time_unit="date",
+            gender="",
+        )
+        if data and "results" in data:
+            file_path = save_data_to_csv(data)
+            last_update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state["last_update_time"] = last_update_time
+            print(f"✅ [자동 수집 완료] {file_path}")
+        else:
+            print("⚠️ [자동 수집 실패] 응답 없음")
+    except Exception as e:
+        print(f"❌ 자동 업데이트 중 오류: {e}")
 
 
 # Streamlit 기본 설정
@@ -57,6 +85,14 @@ with st.sidebar:
     with colB:
         merge_btn = st.button("🗂 CSV 전체 병합")
 
+    st.divider()
+    st.subheader("🕒 자동 업데이트 상태")
+
+    if "last_update_time" in st.session_state and st.session_state["last_update_time"]:
+        st.success(f"마지막 자동 수집: {st.session_state['last_update_time']}")
+    else:
+        st.info("자동 수집 기록이 아직 없습니다.")
+
 # 키워드 처리
 keywords = [k.strip() for k in raw_keywords.split(",") if k.strip()]
 if not keywords:
@@ -94,7 +130,6 @@ if merge_btn:
     if merged.empty:
         st.warning("병합할 CSV 파일이 없습니다.")
     else:
-        from datetime import datetime
         merged_path = f"data/merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         merged.to_csv(merged_path, index=False, encoding="utf-8-sig")
         df = merged
@@ -294,3 +329,9 @@ if df is not None and not df.empty:
         st.download_button("💾 CSV 다운로드", csv, "trend_data_latest.csv", "text/csv")
 else:
     st.info("좌측에서 검색어를 입력하고 '데이터 업데이트'를 눌러주세요.")
+
+# 자동 업데이트 스케줄러 등록
+scheduler = BackgroundScheduler()
+scheduler.add_job(auto_update_job, 'interval', hours=24)  # 하루 한 번
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
