@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
+from datetime import datetime
 
 # 내부 모듈
 from analysis.api_manager import get_naver_trend_data
@@ -94,10 +95,10 @@ if merge_btn:
     if merged.empty:
         st.warning("병합할 CSV 파일이 없습니다.")
     else:
-        path = save_data_to_csv({"results": []}, folder_path="data")  # 더미 저장용
-        merged.to_csv(path, index=False)
+        merged_path = f"data/merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        merged.to_csv(merged_path, index=False, encoding="utf-8-sig")
         df = merged
-        st.success(f"🗂 CSV 병합 완료 → {path}")
+        st.success(f"🗂 CSV 병합 완료 → {merged_path}")
 
 if df is not None and not df.empty:
     df['date'] = pd.to_datetime(df['date'])

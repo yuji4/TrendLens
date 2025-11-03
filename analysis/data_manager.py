@@ -12,6 +12,10 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     '''
     os.makedirs(folder_path, exist_ok=True)
 
+    if not data or 'results' not in data or not data['results']:
+        print("ERROR: 유효하지 않거나 비어 있는 데이터입니다. 저장 건너뜀.")
+        return ""
+
     # 타임스탬프 기반 파일명 생성 및 저장
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_name = f"trend_data_{timestamp}.csv"
