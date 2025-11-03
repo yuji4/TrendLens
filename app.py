@@ -179,18 +179,35 @@ if df is not None and not df.empty:
             if c != "date":
                 pct[c] = (pct[c] * 100).round(2)
 
-        threshold = st.slider("이상치 감지 임계값(%)", 10, 200, 50, step=10)
+        threshold = st.slider("급변 기준(%)", 10, 200, 50, step=10)
         alerts = []
         for col in pct.columns:
             if col != "date":
                 spikes = pct.loc[pct[col].abs() >= threshold, ["date", col]]
                 for _, row in spikes.iterrows():
                     change = row[col]
-                    direction = "📈 급등" if change > 0 else "📉 급락"
-                    alerts.append(f"- [{col.replace('_증감률(%)','')}] {row['date'].date()} : {direction} ({change:+.1f}%)")
+                    direction = "급등" if change > 0 else "급락"
+                    alerts.append({
+                        "키워드": col.replace("_증감률(%)", ""),
+                        "날짜": row["date"].date(),
+                        "유형": direction,
+                        "변동률(%)": round(change, 1)
+                    })
 
         if alerts:
-            st.warning("⚠️ 이상치 감지 결과:\n" + "\n".join(alerts))
+            alert_df = pd.DataFrame(alerts)
+            alert_df = alert_df.sort_values(by=["키워드", "날짜"]).reset_index(drop=True)
+            st.warning(f"⚠️ 트렌드 급상승/급락 키워드 감지 결과 ({len(alert_df)}건)")
+
+            def highlight_row(row):
+                color = "#FFCDD2" if row["유형"] == "급등" else "#BBDEFB"
+                return [f"background-color: {color}"] * len(row)
+            st.dataframe(
+                alert_df.style.apply(highlight_row, axis=1),
+                width='stretch',
+                height=350
+            )
+
         else:
             st.info("✅ 설정된 임계값 내에서는 이상치가 없습니다.")
 
