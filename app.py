@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from analysis.api_manager import get_naver_trend_data
 from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
 
+
 # Streamlit 기본 설정
 st.set_page_config(page_title="네이버 검색 트렌드 분석", layout="wide")
 st.title("👀 TrendLens: 네이버 검색 트렌드")
@@ -99,11 +100,18 @@ if merge_btn:
         st.success(f"🗂 CSV 병합 완료 → {path}")
 
 if df is not None and not df.empty:
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values('date')
+
     if align_option == "공통 날짜":
          df = df.dropna(subset=[c for c in df.columns if c != "date"])
     if smooth_window > 1:
-        tmp = df.set_index("date").rolling(window=smooth_window, min_periods=1).mean()
-        df = tmp.reset_index()
+        value_cols = [c for c in df.columns if c != "date"]
+        df[value_cols] = (
+            df[value_cols]
+            .rolling(window=smooth_window, min_periods=1)
+            .mean()
+        )
 
 # 대시보드 출력
 if df is not None and not df.empty:
@@ -115,8 +123,8 @@ if df is not None and not df.empty:
         df_long = df.melt(id_vars="date", var_name="keyword", value_name="ratio")
         fig = px.line(df_long, x="date", y="ratio", color="keyword", markers=True,
                       title="📈 키워드별 검색 트렌드 변화")
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(df, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
+        st.dataframe(df, width='stretch')
 
     # 📈 탭 2: 정규화/증감
     with tab2:
@@ -157,7 +165,7 @@ if df is not None and not df.empty:
                        ('color', '#212121')]}
         ]).highlight_max(axis=0, color='#C5E1A5')
 
-        st.dataframe(styled_df, use_container_width=True, height=500)
+        st.dataframe(styled_df, width='stretch', height=500)
 
         # 증감률 그래프
         pct_long = pct.melt(id_vars="date", var_name="keyword", value_name="change")
@@ -173,7 +181,7 @@ if df is not None and not df.empty:
             xaxis_tickangle=-45,
             legend_title_text="키워드"
         )
-        st.plotly_chart(fig_change, use_container_width=True)
+        st.plotly_chart(fig_change, width='stretch')
 
         # 정규화 그래프
         df_scaled_long = scaled.melt(id_vars="date", var_name="metric", value_name="value")
@@ -188,17 +196,17 @@ if df is not None and not df.empty:
             font=dict(size=14),
             legend_title_text="정규화 키워드"
         )
-        st.plotly_chart(fig_scaled, use_container_width=True)
+        st.plotly_chart(fig_scaled, width='stretch')
 
     # 🔗 탭 3: 상관 분석
     with tab3:
         st.subheader("키워드 간 상관관계")
 
         corr = df.set_index("date").corr()
-        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), use_container_width=True)
+        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), width='stretch')
 
         fig3 = px.imshow(corr, text_auto=True, aspect="auto", title="Correlation Heatmap")
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
 
         # 네트워크 그래프 추가
         st.markdown("### 🕸️ 네트워크 상관관계 그래프")
@@ -258,7 +266,7 @@ if df is not None and not df.empty:
                 yaxis=dict(showgrid=False, zeroline=False, visible=False),
                 height=600,
             )
-            st.plotly_chart(fig_network, use_container_width=True)
+            st.plotly_chart(fig_network, width='stretch')
 
     # ⬇️ 탭 4: CSV 다운로드
     with tab4:

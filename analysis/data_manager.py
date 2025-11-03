@@ -9,13 +9,6 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     '''
     네이버 API 응답 JSON을 DataFrame으로 변환 후 타임스탬프를 붙여 CSV로 저장
     DataFrame은 날짜(index)별로 키워드별 검색 비율을 컬럼으로 갖는 피벗 형식
-
-    매개변수:
-        data(dict): Naver API 응답 JSON 딕셔너리
-        folder_path(str): CSV 파이을 저장할 폴더 경로 (기본값: 'data')
-
-    반환값:
-        str: 저장할 파일의 전체 경로(성공) or 빈 문자열(실패) 
     '''
     os.makedirs(folder_path, exist_ok=True)
 
@@ -56,10 +49,10 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
 
     # 데이터를 피벗하여 날짜를 인덱스, 키워드를 컬럼으로 만들기
     df_pivot = df_raw.pivot_table(
-        index='date',
-        columns='keyword',
-        values='ratio'
+        index='date', columns='keyword', values='ratio'
     ).reset_index()
+    df_pivot = df_pivot.sort_values("date")
+    df_pivot = collapse_dup_columns(df_pivot)
  
     try:
         df_pivot.to_csv(file_path, index=False, encoding="utf-8-sig")
@@ -73,12 +66,6 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
 def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
     '''
     저장된 폴더에서 가장 최근에 저장된 CSV 파일을 DateFrame으로 로드
-
-    매개변수:
-        folder_path(str): CSV 파일이 저장된 폴더 경로 (기본값은 'data')
-
-    반환값:
-        pd.DataFrame: 최신 CSV 파일의 데이터. 파일을 찾지 못하면 빈 DataFrame 반환
     '''
 
     # 폴더 내 모든 'trend_data_*.csv' 패턴 파일 검색
@@ -109,7 +96,7 @@ def collapse_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df.columns = new_cols 
     if len(set(new_cols)) != len(new_cols): 
-        df = df.T.groupby(level=0).mean(numeric_only=True)
+        df = df.T.groupby(level=0).mean(numeric_only=True).T
     return df
 
 def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
@@ -137,13 +124,13 @@ def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
 
-    # ① 세로로 붙이고(열 정렬됨) ② 같은 날짜는 수치 컬럼 평균
     merged = pd.concat(frames, ignore_index=True, sort=False)
     merged = merged.groupby('date', as_index=False).mean(numeric_only=True)
-
-    # 전부 NaN인 열 제거 + 정렬
     merged = merged.dropna(axis=1, how='all')
-    merged.sort_values('date', inplace=True)
+    merged['date'] = pd.to_datetime(merged['date'], errors='coerce')
+    merged = merged.dropna(subset=['date']).sort_values('date')
+
+    merged = collapse_dup_columns(merged)
     
     print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
     return merged
