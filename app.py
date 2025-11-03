@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
-from datetime import datetime
 
 # 내부 모듈
 from analysis.api_manager import get_naver_trend_data
@@ -95,6 +94,7 @@ if merge_btn:
     if merged.empty:
         st.warning("병합할 CSV 파일이 없습니다.")
     else:
+        from datetime import datetime
         merged_path = f"data/merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         merged.to_csv(merged_path, index=False, encoding="utf-8-sig")
         df = merged
@@ -216,58 +216,77 @@ if df is not None and not df.empty:
 
         threshold = st.slider("상관계수 임계값", 0.0, 1.0, 0.6, 0.05)
         G = nx.Graph()
-        for col in corr.columns:
-            G.add_node(col)
+        
+        for i in corr.columns:
+            G.add_node(i)
         for i in corr.columns:
             for j in corr.columns:
                 if i != j and abs(corr.loc[i, j]) >= threshold:
                     G.add_edge(i, j, weight=corr.loc[i, j])
-        if len(G.edges)  == 0:
+
+        if len(G.edges) == 0:
             st.info(f"임계값 {threshold} 이상인 상관관계가 없습니다.")
         else:
-            pos = nx.spring_layout(G, seed=42, k=0.5)  # 위치 계산(고정 랜덤 시드)
+            pos = nx.spring_layout(G, seed=42, k=0.5)
 
-            # plotly 그래프용 데이터 구성하기
-            edge_x, edge_y, edge_colors = [], [], []
-            for edge in G.edges(data=True):
-                x0, y0 = pos[edge[0]]
-                x1, y1 = pos[edge[1]]
-                edge_x += [x0, x1, None]
-                edge_y += [y0, y1, None]
-                edge_colors.append(edge[2]['weight'])
+        edge_x, edge_y, edge_text = [], [], []
+        for u, v, data in G.edges(data=True):
+            x0, y0 = pos[u]
+            x1, y1 = pos[v]
+            edge_x += [x0, x1, None]
+            edge_y += [y0, y1, None]
+            edge_text.append(f"{u} ↔ {v}: {data['weight']:.2f}")
 
-            node_x, node_y = zip(*[pos[n] for n in G.nodes])
-            node_trace = go.Scatter(
-                x=node_x, y=node_y,
-                mode='markers+text',
-                text=list(G.nodes),
-                textposition="top center",
-                hoverinfo="text",
-                marker=dict(
-                    size=18,
-                    color='skyblue',
-                    line=dict(width=2, color='DarkSlateGrey')
-                )
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            mode='lines',
+            line=dict(width=1.5, color='lightgray'),
+            hoverinfo='text',
+            text=edge_text,
+            hoverlabel=dict(bgcolor='white')
+        )
+
+        node_x, node_y, node_size, node_text = [], [], [], []
+        for node in G.nodes:
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            deg = len(list(G.neighbors(node)))
+            avg_weight = (
+                sum(abs(G[node][nbr]['weight']) for nbr in G.neighbors(node)) / deg
+                if deg > 0 else 0
             )
+            node_size.append(15 + avg_weight * 30)
+            node_text.append(f"{node}<br>연결 {deg}개<br>평균 상관도 {avg_weight:.2f}")
 
-            edge_trace = go.Scatter(
-                x=edge_x, y=edge_y,
-                mode='lines',
-                line=dict(width=2, color='LightGray'),
-                hoverinfo='none'
+        node_trace = go.Scatter(
+            x=node_x, y=node_y,
+            mode='markers+text',
+            text=list(G.nodes),
+            textposition="top center",
+            hoverinfo="text",
+            hovertext=node_text,
+            marker=dict(
+                size=node_size,
+                color='skyblue',
+                line=dict(width=2, color='DarkSlateGrey')
             )
+        )
 
-            fig_network = go.Figure(data=[edge_trace, node_trace])
-            fig_network.update_layout(
-                title=f"키워드 네트워크 (|r| ≥ {threshold})",
-                showlegend=False,
-                hovermode='closest',
-                margin=dict(l=10, r=10, t=50, b=10),
-                xaxis=dict(showgrid=False, zeroline=False, visible=False),
-                yaxis=dict(showgrid=False, zeroline=False, visible=False),
-                height=600,
-            )
-            st.plotly_chart(fig_network, width='stretch')
+        fig_network = go.Figure(data=[edge_trace, node_trace])
+        fig_network.update_layout(
+            title=f"키워드 네트워크 (|r| ≥ {threshold})",
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(l=10, r=10, t=50, b=10),
+            xaxis=dict(showgrid=False, zeroline=False, visible=False),
+            yaxis=dict(showgrid=False, zeroline=False, visible=False),
+            height=650,
+            plot_bgcolor='white',
+            font=dict(size=14)
+        )
+        st.plotly_chart(fig_network, width='stretch')
+        
 
     # ⬇️ 탭 4: CSV 다운로드
     with tab4:
