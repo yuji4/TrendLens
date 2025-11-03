@@ -179,6 +179,21 @@ if df is not None and not df.empty:
             if c != "date":
                 pct[c] = (pct[c] * 100).round(2)
 
+        threshold = st.slider("이상치 감지 임계값(%)", 10, 200, 50, step=10)
+        alerts = []
+        for col in pct.columns:
+            if col != "date":
+                spikes = pct.loc[pct[col].abs() >= threshold, ["date", col]]
+                for _, row in spikes.iterrows():
+                    change = row[col]
+                    direction = "📈 급등" if change > 0 else "📉 급락"
+                    alerts.append(f"- [{col.replace('_증감률(%)','')}] {row['date'].date()} : {direction} ({change:+.1f}%)")
+
+        if alerts:
+            st.warning("⚠️ 이상치 감지 결과:\n" + "\n".join(alerts))
+        else:
+            st.info("✅ 설정된 임계값 내에서는 이상치가 없습니다.")
+
         # 정규화
         scaled = df2.copy()
         for col in [c for c in df2.columns if c != "date"]:
