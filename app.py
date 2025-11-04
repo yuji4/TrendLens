@@ -4,6 +4,7 @@ import plotly.express as px
 from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+import os, glob
 
 # 내부 모듈
 from analysis.api_manager import get_naver_trend_data
@@ -199,9 +200,15 @@ if df is not None and not df.empty:
             alert_df = alert_df.sort_values(by=["키워드", "날짜"]).reset_index(drop=True)
             st.warning(f"⚠️ 트렌드 급상승/급락 키워드 감지 결과 ({len(alert_df)}건)")
 
+            keywords_in_alert = sorted(alert_df["키워드"].unique())
+            selected_kw = st.selectbox("🔍 특정 키워드 선택", ["전체 보기"] + keywords_in_alert)
+
+            filterted_df = alert_df if selected_kw == "전체 보기" else alert_df[alert_df["키워드"] == selected_kw]
+
             def highlight_row(row):
                 color = "#FFCDD2" if row["유형"] == "급등" else "#BBDEFB"
                 return [f"background-color: {color}"] * len(row)
+
             st.dataframe(
                 alert_df.style.apply(highlight_row, axis=1),
                 width='stretch',
@@ -209,7 +216,7 @@ if df is not None and not df.empty:
             )
 
         else:
-            st.info("✅ 설정된 임계값 내에서는 이상치가 없습니다.")
+            st.info("✅ 설정된 임계값 내에서는 급상승/급하락 변화가 없습니다.")
 
         # 정규화
         scaled = df2.copy()
@@ -367,3 +374,22 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(auto_update_job, 'interval', hours=24)  # 하루 한 번
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
+
+st.subheader("📈 최근 자동 수집 로그 (7일)")
+csv_files = sorted(
+    glob.glob("data/trend_data_*.csv"),
+    key=os.path.getctime,
+    reverse=True
+)
+log_df = pd.DataFrame([
+    {"파일": os.path.basename(f), "생성시각": datetime.fromtimestamp(os.path.getctime(f))}
+    for f in csv_files
+])
+
+if not log_df.empty:
+    log_df = log_df[log_df["생성시각"] > datetime.now() - timedelta(days=7)]
+    st.dataframe(log_df, width='stretch')
+    fig_log = px.scatter(log_df, x="생성시각", y=["파일"], title="최근 7일 자동 수집 타임라인")
+    st.plotly_chart(fig_log, width='stretch')
+else:
+    st.info("최근 자동 수집 로그가 없습니다.")
