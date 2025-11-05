@@ -5,17 +5,14 @@ import plotly.graph_objects as go
 from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, os, glob, warnings
-# Prophet, ARIMA, networkx는 모두 유지
 from prophet import Prophet
 from statsmodels.tsa.arima.model import ARIMA
-import networkx as nx 
-
-# matplotlib.pyplot은 예측 탭에서 사용하므로 전역으로 import
-import matplotlib.pyplot as plt 
+import networkx as nx
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
 
-# 내부 모듈 (두 코드 모두 동일하게 필요)
+# 내부 모듈
 from analysis.api_manager import get_naver_trend_data
 from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
 
@@ -37,7 +34,6 @@ def auto_update_job():
         )
         if data and "results" in data:
             file_path = save_data_to_csv(data)
-            # session_state에 저장
             st.session_state["last_update_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"✅ [자동 수집 완료] {file_path}")
         else:
@@ -47,7 +43,19 @@ def auto_update_job():
 
 
 # ===============================
-# 전역 스타일 및 기본 설정
+# 전역 시각화 스타일
+# ===============================
+PLOTLY_STYLE = dict(
+    plot_bgcolor="white",
+    paper_bgcolor="white",
+    font=dict(size=14, color="#212121"),
+    hovermode="x unified",
+    margin=dict(l=40, r=30, t=60, b=40),
+    legend=dict(orientation="h", y=-0.2)
+)
+
+# ===============================
+# 기본 설정 및 스타일
 # ===============================
 st.set_page_config(page_title="TrendLens - 네이버 트렌드 분석", layout="wide")
 
@@ -80,6 +88,7 @@ st.markdown(
 
 st.title("👀 TrendLens: 네이버 검색 트렌드 분석")
 
+
 # ===============================
 # ⚙️ 사이드바
 # ===============================
@@ -96,36 +105,24 @@ with st.sidebar:
     gender = {"전체": "", "남성": "m", "여성": "f"}[gender_display]
 
     st.divider()
-    st.markdown("### 📊 데이터 옵션") # 시각화 옵션에서 데이터 옵션으로 변경
-
-    align_option = st.radio(
-        "날짜 정렬 기준",
-        ["모든 날짜", "공통 날짜"],
-        index=0,
-        help="모든 날짜를 표시하거나, 모든 키워드에 값이 존재하는 날짜만 표시할 수 있습니다."
-    )
-    
-    # smooth_window 슬라이더 제거 -----------------------------------
-    # smooth_window = st.slider(...)
-    # -------------------------------------------------------------
+    st.markdown("### 📊 데이터 옵션")
+    align_option = st.radio("날짜 정렬 기준", ["모든 날짜", "공통 날짜"], index=0)
 
     st.divider()
     st.markdown("### 🪄 데이터 관리")
     colA, colB = st.columns(2)
     with colA:
-        update_btn = st.button("🔄 업데이트", width='stretch')
+        update_btn = st.button("🔄 업데이트", use_container_width=True)
     with colB:
-        merge_btn = st.button("🗂 CSV 병합", width='stretch')
+        merge_btn = st.button("🗂 CSV 병합", use_container_width=True)
 
     st.divider()
     st.markdown("### 🕒 자동 수집 상태")
-
     if st.session_state.get("last_update_time"):
         st.success(f"마지막 수집: {st.session_state['last_update_time']}")
     else:
         st.info("자동 수집 기록이 없습니다.")
 
-    # 최근 자동 수집 로그 요약 (7일치)
     st.markdown("#### 📈 최근 자동 수집 로그")
     csv_files = sorted(glob.glob("data/trend_data_*.csv"), key=os.path.getctime, reverse=True)
     log_df = pd.DataFrame([
@@ -135,12 +132,12 @@ with st.sidebar:
     if not log_df.empty:
         log_df = log_df[log_df["생성시각"] > datetime.now() - timedelta(days=7)]
         for _, row in log_df.head(3).iterrows():
-             st.markdown(
-                 f"<div style='font-size:13px; padding:4px 0;'>"
-                 f"📂 <b>{row['파일']}</b><br>"
-                 f"⏰ {row['생성시각'].strftime('%Y-%m-%d %H:%M:%S')}</div>",
-                 unsafe_allow_html=True,
-             )
+            st.markdown(
+                f"<div style='font-size:13px; padding:4px 0;'>"
+                f"📂 <b>{row['파일']}</b><br>"
+                f"⏰ {row['생성시각'].strftime('%Y-%m-%d %H:%M:%S')}</div>",
+                unsafe_allow_html=True,
+            )
     else:
         st.caption("최근 로그 없음.")
 
@@ -155,7 +152,6 @@ if not keywords:
 
 df = None
 
-# 데이터 업데이트
 if update_btn:
     with st.spinner("데이터를 가져오는 중..."):
         try:
@@ -175,11 +171,9 @@ if update_btn:
         except Exception as e:
             st.error(f"데이터 수집 중 오류: {e}")
 
-# 최근 CSV 불러오기
 if df is None:
     df = load_latest_csv()
 
-# 데이터 병합
 if merge_btn:
     merged = merge_all_csv()
     if merged.empty:
@@ -190,18 +184,15 @@ if merge_btn:
         df = merged
         st.success(f"🗂 CSV 병합 완료 → {merged_path}")
 
-# 공통 전처리 및 옵션 적용
 if df is not None and not df.empty:
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date")
-
-    # 공통 날짜 필터링 적용 (이동평균은 Tab 1으로 이동)
     if align_option == "공통 날짜":
-         df = df.dropna(subset=[c for c in df.columns if c != "date"])
+        df = df.dropna(subset=[c for c in df.columns if c != "date"])
 
 
 # ===============================
-# 📊 메인 탭 (기능 통합)
+# 📊 메인 탭
 # ===============================
 if df is not None and not df.empty:
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -211,245 +202,187 @@ if df is not None and not df.empty:
         "🔮 트렌드 예측",
         "⬇️ 다운로드"
     ])
-    
+
     # --- 탭 1: 트렌드 비교 ---
     with tab1:
         st.caption("선택한 키워드별 검색량 추이를 이동평균을 적용하여 부드럽게 비교합니다.")
         st.subheader("📊 키워드별 트렌드 변화")
-        
-        # 이동평균 슬라이더를 Tab 1 내부로 이동
-        smooth_window = st.slider(
-            "이동평균 적용 기간 (그래프 부드럽게)",
-            min_value=1, max_value=14, value=1, step=1,
-            help="값을 1보다 크게 하면 트렌드 그래프가 부드럽게 표시됩니다."
-        )
-        
+        smooth_window = st.slider("이동평균 기간", 1, 14, 1, 1)
+
         df_vis = df.copy()
-        
-        # Tab 1에서만 이동평균 적용
         if smooth_window > 1:
             value_cols = [c for c in df.columns if c != "date"]
             df_vis[value_cols] = df_vis[value_cols].rolling(window=smooth_window, min_periods=1).mean()
-        
+
         df_long = df_vis.melt(id_vars="date", var_name="keyword", value_name="ratio")
         fig = px.line(df_long, x="date", y="ratio", color="keyword", markers=True)
-        fig.update_layout(plot_bgcolor="white", font=dict(size=14))
-        st.plotly_chart(fig, width='stretch')
-        
-        st.markdown("#### 원본/이동평균 적용 데이터")
-        st.dataframe(df_vis, width='stretch')
+        fig.update_layout(**PLOTLY_STYLE)
+        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(df_vis, use_container_width=True)
 
-    # --- 탭 2: 상세 분석 (급등/급락, 정규화, 증감률) ---
+    # --- 탭 2: 상세 분석 ---
     with tab2:
-        st.caption("일별 증감률, 정규화된 데이터, 그리고 급변 지점을 감지합니다.")
-        st.subheader("📈 트렌드 급상승·급하락 감지 및 상세 분석")
-        
-        # df2는 이동평균이 적용되지 않은 df를 사용해야 정확한 증감률 계산 가능
-        df2 = df.copy().set_index("date") 
-        
-        # 1. 증감률 계산
-        pct = df2.pct_change(fill_method=None).reset_index()
-        pct.columns = ["date" if c == "date" else f"{c}_증감률(%)" for c in pct.columns]
-        for c in pct.columns:
-            if c != "date":
-                pct[c] = (pct[c] * 100).round(2)
+        st.caption("급등·급락 변화율과 정규화 데이터를 분석합니다.")
+        st.subheader("📈 급상승·급하락 분석")
 
-        # 2. 급변 감지
-        threshold = st.slider("급변 기준(%)", 10, 200, 50, step=10, key="tab2_threshold")
+        view_mode = st.radio("분석 보기 모드", ["전체 요약 보기", "키워드별 상세 보기"], horizontal=True)
+        df2 = df.copy().set_index("date")
+        pct = df2.pct_change().reset_index()
+        pct.columns = ["date"] + [f"{c}_증감률(%)" for c in df2.columns]
+        for c in pct.columns[1:]:
+            pct[c] = (pct[c] * 100).round(2)
+
+        threshold = st.slider("급변 기준(%)", 10, 200, 50, 10)
         alerts = []
-        for col in pct.columns:
-            if col != "date":
-                spikes = pct.loc[pct[col].abs() >= threshold, ["date", col]]
-                for _, row in spikes.iterrows():
-                    change = row[col]
-                    direction = "급등" if change > 0 else "급락"
-                    alerts.append({
-                        "키워드": col.replace("_증감률(%)", ""),
-                        "날짜": row["date"].date(),
-                        "유형": direction,
-                        "변동률(%)": round(change, 1)
-                    })
+        for col in pct.columns[1:]:
+            spikes = pct.loc[pct[col].abs() >= threshold, ["date", col]]
+            for _, r in spikes.iterrows():
+                alerts.append({
+                    "키워드": col.replace("_증감률(%)", ""),
+                    "날짜": r["date"].date(),
+                    "유형": "급등" if r[col] > 0 else "급락",
+                    "변동률(%)": round(r[col], 1)
+                })
 
-        if alerts:
-            alert_df = pd.DataFrame(alerts).sort_values(["키워드", "날짜"])
-            st.warning(f"⚠️ 감지된 급상승/급하락 이벤트: {len(alert_df)}건")
-            st.dataframe(alert_df, width='stretch', height=200)
+        alert_df = pd.DataFrame(alerts)
+
+        if alert_df.empty:
+            st.info("✅ 급변 변화 없음.")
         else:
-            st.info("✅ 설정된 임계값 내 급변 변화 없음.")
-            
+            if view_mode == "전체 요약 보기":
+                st.warning(f"⚠️ 감지된 급변 이벤트 {len(alert_df)}건")
+                st.dataframe(alert_df, use_container_width=True)
+                summary = alert_df.groupby(["키워드", "유형"]).size().unstack(fill_value=0)
+                st.markdown("#### 📊 키워드별 급등/급락 요약")
+                st.dataframe(summary, use_container_width=True)
+            else:
+                selected_kw = st.selectbox("🔍 키워드 선택", sorted(df2.columns))
+                kw_alerts = alert_df[alert_df["키워드"] == selected_kw]
+                if kw_alerts.empty:
+                    st.info(f"{selected_kw} 키워드에서 급변 없음.")
+                else:
+                    st.dataframe(kw_alerts, use_container_width=True)
+                    fig_kw = px.line(df2.reset_index(), x="date", y=selected_kw, title=f"{selected_kw} 급등·급락 구간")
+                    for _, r in kw_alerts.iterrows():
+                        color = "red" if r["유형"] == "급등" else "blue"
+                        fig_kw.add_vline(x=r["날짜"], line_dash="dot", line_color=color)
+                    fig_kw.update_layout(**PLOTLY_STYLE)
+                    st.plotly_chart(fig_kw, use_container_width=True)
+
         st.divider()
-        
-        # 3. 정규화 계산
         scaled = df2.copy()
-        for col in [c for c in df2.columns if c != "date"]:
+        for col in df2.columns:
             minv, maxv = scaled[col].min(), scaled[col].max()
-            scaled[col] = (scaled[col] - minv) / (maxv - minv) if (maxv - minv) != 0 else 0
+            scaled[col] = (scaled[col] - minv) / (maxv - minv) if maxv != minv else 0
         scaled = scaled.reset_index()
-        scaled.columns = ["date"] + [f"{c}_정규화(0~1)" for c in df2.columns]
-        
-        # 4. 정규화 그래프 (두 번째 코드 기능)
         df_scaled_long = scaled.melt(id_vars="date", var_name="metric", value_name="value")
-        fig_scaled = px.line(
-            df_scaled_long, x="date", y="value", color="metric", title="정규화(0~1) 추세"
-        )
-        fig_scaled.update_layout(plot_bgcolor='white', font=dict(size=14))
-        st.plotly_chart(fig_scaled, width='stretch')
+        fig_scaled = px.line(df_scaled_long, x="date", y="value", color="metric", title="정규화(0~1) 추세")
+        fig_scaled.update_layout(**PLOTLY_STYLE)
+        st.plotly_chart(fig_scaled, use_container_width=True)
 
-
-    # --- 탭 3: 상관 분석 (히트맵 + 네트워크) ---
+    # --- 탭 3: 상관 분석 ---
     with tab3:
-        st.caption("키워드 간의 검색량 패턴 유사도를 상관계수를 통해 분석하고, 네트워크 형태로 시각화합니다.")
-        st.subheader("🔗 키워드 상관관계 분석")
-        
-        # 이동평균이 적용되지 않은 df 사용
-        corr = df.set_index("date").corr() 
-        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), width='stretch')
-        fig_corr = px.imshow(corr, text_auto=True, aspect="auto", title="Correlation Heatmap")
-        st.plotly_chart(fig_corr, width='stretch')
-        
-        st.divider()
-        st.markdown("### 🕸️ 네트워크 상관관계 그래프")
-        
-        threshold_net = st.slider("상관계수 임계값 (네트워크)", 0.0, 1.0, 0.6, 0.05, key="net_threshold")
+        st.caption("키워드 간 검색 패턴 유사도를 상관계수 및 네트워크로 분석합니다.")
+        st.subheader("🔗 상관관계 분석")
+        corr = df.set_index("date").corr()
+        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), use_container_width=True)
+        fig_corr = px.imshow(corr, text_auto=True, aspect="auto", title="Correlation Heatmap", color_continuous_scale="RdBu_r")
+        fig_corr.update_layout(**PLOTLY_STYLE)
+        st.plotly_chart(fig_corr, use_container_width=True)
+
+        st.markdown("### 🕸️ 네트워크 상관 그래프")
+        threshold_net = st.slider("상관계수 임계값", 0.0, 1.0, 0.6, 0.05)
         G = nx.Graph()
-        
-        for i in corr.columns:
-            G.add_node(i)
         for i in corr.columns:
             for j in corr.columns:
                 if i != j and abs(corr.loc[i, j]) >= threshold_net:
                     G.add_edge(i, j, weight=corr.loc[i, j])
 
         if len(G.edges) == 0:
-            st.info(f"임계값 {threshold_net} 이상인 상관관계가 없습니다.")
+            st.info(f"임계값 {threshold_net} 이상인 상관 없음.")
         else:
-            pos = nx.spring_layout(G, seed=42, k=0.5)
-
-            edge_x, edge_y, edge_text = [], [], []
-            for u, v, data in G.edges(data=True):
+            pos = nx.spring_layout(G, seed=42)
+            edge_x, edge_y, edge_color = [], [], []
+            for u, v, d in G.edges(data=True):
                 x0, y0 = pos[u]
                 x1, y1 = pos[v]
                 edge_x += [x0, x1, None]
                 edge_y += [y0, y1, None]
-                edge_text.append(f"{u} ↔ {v}: {data['weight']:.2f}")
+                color = "rgba(255,0,0,0.3)" if d["weight"] > 0 else "rgba(0,0,255,0.3)"
+                edge_color.append(color)
 
-            edge_trace = go.Scatter(
-                x=edge_x, y=edge_y, mode='lines', line=dict(width=1.5, color='lightgray'),
-                hoverinfo='text', text=edge_text, hoverlabel=dict(bgcolor='white')
-            )
-
-            node_x, node_y, node_size, node_text = [], [], [], []
-            for node in G.nodes:
-                x, y = pos[node]
-                node_x.append(x)
-                node_y.append(y)
-                deg = len(list(G.neighbors(node)))
-                avg_weight = (
-                    sum(abs(G[node][nbr]['weight']) for nbr in G.neighbors(node)) / deg
-                    if deg > 0 else 0
-                )
-                node_size.append(15 + avg_weight * 30)
-                node_text.append(f"{node}<br>연결 {deg}개<br>평균 상관도 {avg_weight:.2f}")
-
+            edge_trace = go.Scatter(x=edge_x, y=edge_y, mode="lines", line=dict(width=2, color="lightgray"))
+            node_x, node_y = zip(*[pos[n] for n in G.nodes()])
             node_trace = go.Scatter(
-                x=node_x, y=node_y, mode='markers+text', text=list(G.nodes),
-                textposition="top center", hoverinfo="text", hovertext=node_text,
-                marker=dict(size=node_size, color='skyblue', line=dict(width=2, color='DarkSlateGrey'))
+                x=node_x, y=node_y, mode="markers+text", text=list(G.nodes()),
+                textposition="top center", marker=dict(size=25, color="#90CAF9", line=dict(width=2, color="#1565C0"))
             )
+            fig_net = go.Figure(data=[edge_trace, node_trace])
+            fig_net.update_layout(title=f"키워드 네트워크 (|r| ≥ {threshold_net})", **PLOTLY_STYLE)
+            st.plotly_chart(fig_net, use_container_width=True)
 
-            fig_network = go.Figure(data=[edge_trace, node_trace])
-            fig_network.update_layout(
-                title=f"키워드 네트워크 (|r| ≥ {threshold_net})",
-                showlegend=False, hovermode='closest', height=650,
-                xaxis=dict(showgrid=False, zeroline=False, visible=False),
-                yaxis=dict(showgrid=False, zeroline=False, visible=False),
-                plot_bgcolor='white', font=dict(size=14)
-            )
-            st.plotly_chart(fig_network, width='stretch')
-
-
-    # --- 탭 4: 트렌드 예측 (Prophet / ARIMA) ---
+    # --- 탭 4: 예측 ---
     with tab4:
-        st.caption("과거 데이터를 기반으로 향후 트렌드를 예측하고, 신뢰구간을 시각적으로 표시합니다.")
-        st.subheader("🔮 미래 트렌드 예측 (Prophet / ARIMA)")
-        
-        model_type = st.radio("예측 모델 선택", ["Prophet", "ARIMA"], horizontal=True)
-        selected_kw = st.selectbox("예측할 키워드 선택", [c for c in df.columns if c != "date"])
-        days_ahead = st.slider("예측 기간 (일)", 7, 180, 30, step=7)
-        # 예측 데이터는 항상 원본 데이터를 기반으로 해야 함 (이동평균 미적용)
+        st.caption("Prophet / ARIMA 기반 미래 검색 트렌드 예측")
+        st.subheader("🔮 트렌드 예측")
+        model_type = st.radio("모델 선택", ["Prophet", "ARIMA"], horizontal=True)
+        selected_kw = st.selectbox("예측할 키워드", [c for c in df.columns if c != "date"])
+        days_ahead = st.slider("예측 기간 (일)", 7, 180, 30, 7)
         df_forecast = df[["date", selected_kw]].rename(columns={"date": "ds", selected_kw: "y"})
 
-        # 캐싱된 예측 함수 (Prophet)
-        @st.cache_data(show_spinner=False)
-        def run_prophet_forecast(df, days):
+        @st.cache_data
+        def run_prophet(df, days):
             model = Prophet(yearly_seasonality=True, weekly_seasonality=True)
             model.fit(df)
             future = model.make_future_dataframe(periods=days)
             forecast = model.predict(future)
             return model, forecast
 
-        # 캐싱된 예측 함수 (ARIMA)
-        @st.cache_data(show_spinner=False)
-        def run_arima_forecast(df, days):
+        @st.cache_data
+        def run_arima(df, days):
             model = ARIMA(df.set_index("ds"), order=(3, 1, 2))
             fitted = model.fit()
-            future_index = pd.date_range(df["ds"].iloc[-1], periods=days + 1, freq="D")[1:]
+            future_idx = pd.date_range(df["ds"].iloc[-1], periods=days + 1, freq="D")[1:]
             forecast = fitted.forecast(steps=days)
-            forecast_df = pd.DataFrame({"날짜": future_index, "예측값": forecast})
-            return forecast_df
+            return pd.DataFrame({"날짜": future_idx, "예측값": forecast})
 
         if st.button("🚀 예측 실행", type="primary"):
             with st.spinner("예측 중..."):
                 try:
                     if model_type == "Prophet":
-                        model, forecast = run_prophet_forecast(df_forecast, days_ahead)
-
+                        model, forecast = run_prophet(df_forecast, days_ahead)
                         fig = go.Figure()
-                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_upper"], mode="lines",
-                                                     line=dict(width=0), showlegend=False))
+                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat"], mode="lines", name="예측값",
+                                                 line=dict(color="royalblue", width=2)))
+                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_upper"], line=dict(width=0),
+                                                 fill=None, showlegend=False))
                         fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_lower"],
-                                                     fill="tonexty", fillcolor="rgba(135,206,250,0.25)",
-                                                     line=dict(width=0), name="신뢰구간"))
-                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat"],
-                                                     mode="lines", name="예측값",
-                                                     line=dict(color="royalblue", width=2.5, dash="dot")))
-                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"],
-                                                     mode="lines+markers", name="실제값",
-                                                     line=dict(color="black", width=3), marker=dict(size=4)))
-                        fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)",
-                                                 plot_bgcolor="white", hovermode="x unified", font=dict(size=14))
-                        st.plotly_chart(fig, width='stretch')
-                        st.dataframe(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(days_ahead), width='stretch')
-
-                        with st.expander("📉 트렌드 및 계절성 분해 보기"):
-                            comp_fig = model.plot_components(forecast)
-                            st.pyplot(comp_fig)
-                            plt.close(comp_fig) # Streamlit 경고 방지
-
-                    else: # ARIMA
-                        forecast_df = run_arima_forecast(df_forecast, days_ahead)
+                                                 fill="tonexty", fillcolor="rgba(135,206,250,0.2)", line=dict(width=0),
+                                                 name="신뢰구간"))
+                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
+                                                 name="실제값", line=dict(color="black", width=3)))
+                        fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)", **PLOTLY_STYLE)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        forecast_df = run_arima(df_forecast, days_ahead)
                         fig = go.Figure()
-                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"],
-                                                     mode="lines+markers", name="실제값", line=dict(color="black", width=3)))
-                        fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"],
-                                                     mode="lines", name="예측값", line=dict(color="royalblue", width=2.5, dash="dot")))
-                        fig.update_layout(title=f"ARIMA 기반 {selected_kw} {days_ahead}일 예측",
-                                                 plot_bgcolor="white", hovermode="x unified", font=dict(size=14))
-                        st.plotly_chart(fig, width='stretch')
-                        st.dataframe(forecast_df, width='stretch')
-
+                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
+                                                 name="실제값", line=dict(color="black", width=3)))
+                        fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
+                                                 name="예측값", line=dict(color="royalblue", width=2.5, dash="dot")))
+                        fig.update_layout(title=f"ARIMA 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
+                        st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"❌ 예측 중 오류 발생: {e}")
+                    st.error(f"❌ 예측 오류: {e}")
 
-    # --- 탭 5: CSV 다운로드 ---
+    # --- 탭 5: 다운로드 ---
     with tab5:
-        st.caption("현재 로드된 분석 데이터를 CSV 파일로 다운로드합니다.")
         st.subheader("⬇️ CSV 다운로드")
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button("💾 최신 데이터 다운로드", csv, "trend_data_latest.csv", "text/csv")
 
 else:
-    st.info("좌측에서 검색어를 입력하고 '데이터 업데이트'를 눌러주세요.")
+    st.info("좌측에서 검색어를 입력하고 '업데이트'를 눌러주세요.")
 
 
 # ===============================
