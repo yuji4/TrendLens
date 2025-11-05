@@ -2,48 +2,31 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, os, glob, warnings
 from prophet import Prophet
 from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import ccf
+from sklearn.metrics import mean_squared_error
 import networkx as nx
 import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
 
-# 내부 모듈 (이 모듈들은 사용자의 환경에 맞게 존재해야 합니다)
-# from analysis.api_manager import get_naver_trend_data
-# from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
+# 내부 모듈 
+from analysis.api_manager import get_naver_trend_data
+from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
 
-# 로컬 환경에서 테스트를 위해 더미 함수 정의 (원본 모듈이 없는 경우)
-def get_naver_trend_data(keywords, start_date, end_date, time_unit, gender):
-    # 실제 API 호출 로직 대신 더미 데이터 반환
-    return {"results": [{"data": [{"period": str(date.today() - timedelta(days=i)), "ratio": 100 - i * 0.5, "group": keywords[0]} for i in range(90)]}]}
+# 성능 지표 계산 함수
+def mean_absolute_percentage_error(y_true, y_pred):
+    epsilon = 1e-10
+    y_true, y_pred = np.array(y_true), np.array(y_pred)
+    return np.mean(np.abs((y_true - y_pred) / (y_true + epsilon))) * 100
 
-def save_data_to_csv(data):
-    # 실제 CSV 저장 로직 대신 더미 파일 경로 반환
-    return "data/trend_data_latest.csv"
-
-def load_latest_csv():
-    # 실제 CSV 로드 로직 대신 더미 데이터프레임 반환
-    dates = pd.date_range(end=date.today(), periods=90)
-    data = {
-        "date": dates,
-        "Python": [70 + i % 10 + (i % 7) * 2 for i in range(90)],
-        "AI": [80 + (90 - i) % 10 + (i % 5) * 3 for i in range(90)],
-        "Study": [50 + (i % 20) for i in range(90)],
-    }
-    df = pd.DataFrame(data)
-    # Prophet을 위한 최소 데이터 요구사항 충족
-    if len(df) < 14:
-        return pd.DataFrame()
-    return df
-
-def merge_all_csv():
-    # 실제 CSV 병합 로직 대신 빈 데이터프레임 반환
-    return pd.DataFrame()
-
+def root_mean_squared_error(y_true, y_pred):
+    return np.sqrt(mean_squared_error(y_true, y_pred))
 
 # ===============================
 # 🔁 자동 업데이트 함수
@@ -140,9 +123,9 @@ with st.sidebar:
     st.markdown("### 🪄 데이터 관리")
     colA, colB = st.columns(2)
     with colA:
-        update_btn = st.button("🔄 업데이트", use_container_width=True)
+        update_btn = st.button("🔄 업데이트", width='stretch')
     with colB:
-        merge_btn = st.button("🗂 CSV 병합", use_container_width=True)
+        merge_btn = st.button("🗂 CSV 병합", width='stretch')
 
     st.divider()
     st.markdown("### 🕒 자동 수집 상태")
@@ -247,8 +230,8 @@ if df is not None and not df.empty:
         df_long = df_vis.melt(id_vars="date", var_name="keyword", value_name="ratio")
         fig = px.line(df_long, x="date", y="ratio", color="keyword", markers=True)
         fig.update_layout(**PLOTLY_STYLE)
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(df_vis, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
+        st.dataframe(df_vis, width='stretch')
 
     # --- 탭 2: 상세 분석 ---
     with tab2:
@@ -281,23 +264,23 @@ if df is not None and not df.empty:
         else:
             if view_mode == "전체 요약 보기":
                 st.warning(f"⚠️ 감지된 급변 이벤트 {len(alert_df)}건")
-                st.dataframe(alert_df, use_container_width=True)
+                st.dataframe(alert_df, width='stretch')
                 summary = alert_df.groupby(["키워드", "유형"]).size().unstack(fill_value=0)
                 st.markdown("#### 📊 키워드별 급등/급락 요약")
-                st.dataframe(summary, use_container_width=True)
+                st.dataframe(summary, width='stretch')
             else:
                 selected_kw = st.selectbox("🔍 키워드 선택", sorted(df2.columns))
                 kw_alerts = alert_df[alert_df["키워드"] == selected_kw]
                 if kw_alerts.empty:
                     st.info(f"{selected_kw} 키워드에서 급변 없음.")
                 else:
-                    st.dataframe(kw_alerts, use_container_width=True)
+                    st.dataframe(kw_alerts, width='stretch')
                     fig_kw = px.line(df2.reset_index(), x="date", y=selected_kw, title=f"{selected_kw} 급등·급락 구간")
                     for _, r in kw_alerts.iterrows():
                         color = "red" if r["유형"] == "급등" else "blue"
                         fig_kw.add_vline(x=r["날짜"], line_dash="dot", line_color=color)
                     fig_kw.update_layout(**PLOTLY_STYLE)
-                    st.plotly_chart(fig_kw, use_container_width=True)
+                    st.plotly_chart(fig_kw, width='stretch')
 
         st.divider()
         scaled = df2.copy()
@@ -308,17 +291,19 @@ if df is not None and not df.empty:
         df_scaled_long = scaled.melt(id_vars="date", var_name="metric", value_name="value")
         fig_scaled = px.line(df_scaled_long, x="date", y="value", color="metric", title="정규화(0~1) 추세")
         fig_scaled.update_layout(**PLOTLY_STYLE)
-        st.plotly_chart(fig_scaled, use_container_width=True)
+        st.plotly_chart(fig_scaled, width='stretch')
 
     # --- 탭 3: 상관 분석 ---
     with tab3:
         st.caption("키워드 간 검색 패턴 유사도를 상관계수 및 네트워크로 분석합니다.")
         st.subheader("🔗 상관관계 분석")
+
+        # 기본 상관 분석
         corr = df.set_index("date").corr()
-        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), use_container_width=True)
+        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), width='stretch')
         fig_corr = px.imshow(corr, text_auto=True, aspect="auto", title="Correlation Heatmap", color_continuous_scale="RdBu_r")
         fig_corr.update_layout(**PLOTLY_STYLE)
-        st.plotly_chart(fig_corr, use_container_width=True)
+        st.plotly_chart(fig_corr, width='stretch')
 
         st.markdown("### 🕸️ 네트워크 상관 그래프")
         threshold_net = st.slider("상관계수 임계값", 0.0, 1.0, 0.6, 0.05)
@@ -349,7 +334,89 @@ if df is not None and not df.empty:
             )
             fig_net = go.Figure(data=[edge_trace, node_trace])
             fig_net.update_layout(title=f"키워드 네트워크 (|r| ≥ {threshold_net})", **PLOTLY_STYLE)
-            st.plotly_chart(fig_net, use_container_width=True)
+            st.plotly_chart(fig_net, width='stretch')
+
+        # 키워드 간 교차 상관 분석
+        st.divider()
+        st.subheader("🔬 키워드 간 교차 상관 분석 (Cross-Correlation)")
+        st.caption("두 키워드 검색량의 시간 지연(Lag)에 따른 상관관계를 분석하여 선행/후행 관계를 파악합니다.")
+
+        # 키워드 선택
+        kw_list = [c for c in df.columns if c != "date"]
+        col_ccf_select = st.columns(2)
+        with col_ccf_select[0]:
+            kw_a = st.selectbox("키워드 A (X축)", kw_list, index=0)
+        with col_ccf_select[1]:
+            # 기본적으로 A와 다른 키워드를 선택하도록 설정
+            default_index = 1 if len(kw_list) > 1 and kw_list[0] == kw_a else 0
+            kw_b = st.selectbox("키워드 B (Y축)", kw_list, index=default_index)
+
+        max_lag = st.slider("최대 지연 기간 (Lag, 일)", 7, min(30, len(df)//2 - 1), 14, 1)
+
+        if kw_a == kw_b:
+            st.warning("⚠️ 교차 상관 분석을 위해서는 서로 다른 두 키워드를 선택해야 합니다.")
+        else:
+            df_ccf = df.set_index("date").dropna()
+            if len(df_ccf) > max_lag * 2:
+                # CCF 계산
+                ccf_values = ccf(df_ccf[kw_a], df_ccf[kw_b], adjusted=False)
+                
+                # 지연 값 배열 생성 및 최대 지연 기간에 맞게 필터링
+                full_lags = [i - (len(df_ccf) - 1) // 2 for i in range(len(ccf_values))]
+                center_idx = len(ccf_values) // 2
+                
+                lags = full_lags[center_idx - max_lag : center_idx + max_lag + 1]
+                ccf_data = ccf_values[center_idx - max_lag : center_idx + max_lag + 1]
+
+                ccf_df = pd.DataFrame({'Lag': lags, 'CCF': ccf_data})
+
+                # 최대 상관 계수 찾기
+                max_ccf_abs = ccf_df['CCF'].abs().max()
+                max_row = ccf_df.loc[ccf_df['CCF'].abs().idxmax()]
+                optimal_lag = int(max_row['Lag'])
+                
+                # Plotly 시각화
+                fig_ccf = go.Figure(data=[
+                    go.Bar(x=ccf_df['Lag'], y=ccf_df['CCF'], marker_color='#E91E63')
+                ])
+
+                # 최적 지연에 수직선 추가
+                fig_ccf.add_vline(x=optimal_lag, line_width=2, line_dash="dash", line_color="#FFC107")
+                
+                # 유의성 경계선 (대략적인 95% 신뢰 구간) 추가
+                conf_level = 1.96 / (len(df_ccf) ** 0.5)
+                fig_ccf.add_hline(y=conf_level, line_dash="dot", line_color="#4CAF50")
+                fig_ccf.add_hline(y=-conf_level, line_dash="dot", line_color="#4CAF50")
+                
+                fig_ccf.update_layout(
+                    title=f"{kw_a} ↔ {kw_b} 교차 상관 함수 (CCF)",
+                    xaxis_title=f"지연 (Lag, 일) | +Lag: {kw_a}가 {kw_b}를 선행",
+                    yaxis_title="교차 상관 계수",
+                    **PLOTLY_STYLE,
+                    # 기존: hovermode='x'가 PLOTLY_STYLE과 중복되어 오류 발생
+                    # 수정: hovermode 인수를 제거하거나, PLOTLY_STYLE에서 제외해야 함.
+                )
+                # PLOTLY_STYLE에 hovermode='x unified'가 있으므로 별도 인수를 제거합니다.
+
+                st.plotly_chart(fig_ccf, width='stretch')
+
+                st.markdown("#### 🔍 분석 결과")
+                if abs(max_row['CCF']) > conf_level:
+                    analysis_result = ""
+                    if optimal_lag > 0:
+                        analysis_result = f"**{kw_a}**의 검색량 패턴이 **{abs(optimal_lag)}일** **먼저** 발생한 후, **{kw_b}**의 검색 패턴과 가장 높은 상관관계를 가집니다. (선행 지표: **{kw_a}**)"
+                    elif optimal_lag < 0:
+                        analysis_result = f"**{kw_b}**의 검색량 패턴이 **{abs(optimal_lag)}일** **먼저** 발생한 후, **{kw_a}**의 검색 패턴과 가장 높은 상관관계를 가집니다. (선행 지표: **{kw_b}**)"
+                    else:
+                        analysis_result = f"**{kw_a}**와 **{kw_b}**는 **동일 시점(Lag 0)**에 가장 높은 상관관계를 가집니다."
+                    
+                    st.success(f"**최적 지연: {optimal_lag}일** (상관 계수: {max_row['CCF']:.3f})")
+                    st.markdown(analysis_result)
+
+                else:
+                    st.info("선택한 두 키워드 간에 통계적으로 유의미한 교차 상관 관계는 발견되지 않았습니다.")
+            else:
+                st.warning("데이터 길이가 충분하지 않거나, 최대 지연 기간이 너무 길어 CCF를 계산할 수 없습니다. 기간을 줄여주세요.")
 
     # --- 탭 4: 예측 ---
     with tab4:
@@ -392,7 +459,7 @@ if df is not None and not df.empty:
                         fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
                                                  name="실제값", line=dict(color="black", width=3)))
                         fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
 
                         # =========================================================
                         # ✨ 1. Prophet 기반 계절성 및 추세 분해 시각화 (수정 및 개선)
@@ -441,11 +508,11 @@ if df is not None and not df.empty:
                         # -------------------- 4. 3분할 컬럼에 차트 표시 --------------------
                         cols_comp = st.columns(3)
                         with cols_comp[0]:
-                            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_trend, width='stretch', config={'displayModeBar': False})
                         with cols_comp[1]:
-                            st.plotly_chart(fig_yearly, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_yearly, width='stretch', config={'displayModeBar': False})
                         with cols_comp[2]:
-                            st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_weekly, width='stretch', config={'displayModeBar': False})
                         # =========================================================
 
                     else:
@@ -456,7 +523,7 @@ if df is not None and not df.empty:
                         fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
                                                  name="예측값", line=dict(color="royalblue", width=2.5, dash="dot")))
                         fig.update_layout(title=f"ARIMA 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                 except Exception as e:
                     st.error(f"❌ 예측 오류: {e}")
 
