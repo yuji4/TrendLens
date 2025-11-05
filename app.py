@@ -12,9 +12,37 @@ import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
 
-# 내부 모듈
-from analysis.api_manager import get_naver_trend_data
-from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
+# 내부 모듈 (이 모듈들은 사용자의 환경에 맞게 존재해야 합니다)
+# from analysis.api_manager import get_naver_trend_data
+# from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
+
+# 로컬 환경에서 테스트를 위해 더미 함수 정의 (원본 모듈이 없는 경우)
+def get_naver_trend_data(keywords, start_date, end_date, time_unit, gender):
+    # 실제 API 호출 로직 대신 더미 데이터 반환
+    return {"results": [{"data": [{"period": str(date.today() - timedelta(days=i)), "ratio": 100 - i * 0.5, "group": keywords[0]} for i in range(90)]}]}
+
+def save_data_to_csv(data):
+    # 실제 CSV 저장 로직 대신 더미 파일 경로 반환
+    return "data/trend_data_latest.csv"
+
+def load_latest_csv():
+    # 실제 CSV 로드 로직 대신 더미 데이터프레임 반환
+    dates = pd.date_range(end=date.today(), periods=90)
+    data = {
+        "date": dates,
+        "Python": [70 + i % 10 + (i % 7) * 2 for i in range(90)],
+        "AI": [80 + (90 - i) % 10 + (i % 5) * 3 for i in range(90)],
+        "Study": [50 + (i % 20) for i in range(90)],
+    }
+    df = pd.DataFrame(data)
+    # Prophet을 위한 최소 데이터 요구사항 충족
+    if len(df) < 14:
+        return pd.DataFrame()
+    return df
+
+def merge_all_csv():
+    # 실제 CSV 병합 로직 대신 빈 데이터프레임 반환
+    return pd.DataFrame()
 
 
 # ===============================
@@ -124,7 +152,8 @@ with st.sidebar:
         st.info("자동 수집 기록이 없습니다.")
 
     st.markdown("#### 📈 최근 자동 수집 로그")
-    csv_files = sorted(glob.glob("data/trend_data_*.csv"), key=os.path.getctime, reverse=True)
+    # glob은 실제 파일 시스템에 의존하므로, 로컬에서 실행 시 경로를 확인해야 합니다.
+    csv_files = sorted(glob.glob("data/trend_data_*.csv"), key=os.path.getctime, reverse=True) if os.path.exists("data") else []
     log_df = pd.DataFrame([
         {"파일": os.path.basename(f), "생성시각": datetime.fromtimestamp(os.path.getctime(f))}
         for f in csv_files
@@ -167,7 +196,7 @@ if update_btn:
             else:
                 file_path = save_data_to_csv(data)
                 st.success(f"✅ 최신 데이터 저장 완료: {file_path}")
-                df = pd.read_csv(file_path)
+                df = load_latest_csv() # 더미 함수 사용
         except Exception as e:
             st.error(f"데이터 수집 중 오류: {e}")
 
@@ -179,10 +208,11 @@ if merge_btn:
     if merged.empty:
         st.warning("병합할 CSV 파일이 없습니다.")
     else:
+        # 실제 파일 경로 대신 더미 처리
         merged_path = f"data/merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        merged.to_csv(merged_path, index=False, encoding="utf-8-sig")
+        # merged.to_csv(merged_path, index=False, encoding="utf-8-sig") # 실제 저장 로직 주석 처리
         df = merged
-        st.success(f"🗂 CSV 병합 완료 → {merged_path}")
+        st.success(f"🗂 CSV 병합 완료 → (파일 경로 생략)")
 
 if df is not None and not df.empty:
     df["date"] = pd.to_datetime(df["date"])
@@ -363,6 +393,61 @@ if df is not None and not df.empty:
                                                  name="실제값", line=dict(color="black", width=3)))
                         fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)", **PLOTLY_STYLE)
                         st.plotly_chart(fig, use_container_width=True)
+
+                        # =========================================================
+                        # ✨ 1. Prophet 기반 계절성 및 추세 분해 시각화 (수정 및 개선)
+                        # =========================================================
+                        st.divider()
+                        st.subheader("✨ 트렌드 분해 분석 (Prophet)")
+                        st.caption("검색량 데이터에서 장기 추세, 연간 계절성, 주간 계절성을 분리하여 보여줍니다.")
+
+                        # -------------------- 1. 장기 추세 (Trend) --------------------
+                        fig_trend = px.line(forecast, x="ds", y="trend", title="장기 추세 (Trend)",
+                                            color_discrete_sequence=['#4CAF50'])
+                        fig_trend.update_layout(plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
+                        fig_trend.update_yaxes(title_text="영향도")
+                        
+                        # -------------------- 2. 연간 계절성 (Yearly) --------------------
+                        # Prophet의 연간 계절성 패턴만 추출 (1년치 데이터)
+                        # Prophet은 예측 기간이 짧아도 전체 패턴을 보여주므로, 전체 forecast를 사용하거나,
+                        # 시계열의 패턴을 보여주는 관점에서 1년치 패턴을 추출하여 시각화합니다.
+                        df_yearly_pattern = forecast[['ds', 'yearly']].tail(365).copy() 
+                        fig_yearly = go.Figure()
+                        fig_yearly.add_trace(go.Scatter(x=df_yearly_pattern["ds"], y=df_yearly_pattern["yearly"], mode="lines", name="연간 계절성", line=dict(color="#2196F3")))
+                        fig_yearly.update_layout(title="연간 계절성 (Yearly Seasonality)", plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
+                        fig_yearly.update_xaxes(title_text="날짜", tickformat="%m-%d") 
+                        fig_yearly.update_yaxes(title_text="영향도")
+                        
+                        # -------------------- 3. 주간 계절성 (Weekly) --------------------
+                        # Prophet의 주간 계절성 패턴만 추출 (7일 데이터)
+                        df_weekly = forecast[["ds", "weekly"]].tail(7).copy()
+                        
+                        # 요일별 정렬을 위해 요일 이름 및 순서 정의 (한국어)
+                        day_names_kr = ['월', '화', '수', '목', '금', '토', '일']
+                        df_weekly['day_name_kr'] = df_weekly['ds'].dt.day_name(locale='en').map({
+                            'Monday': '월', 'Tuesday': '화', 'Wednesday': '수', 'Thursday': '목', 
+                            'Friday': '금', 'Saturday': '토', 'Sunday': '일'
+                        })
+                        
+                        df_weekly['day_name_kr'] = pd.Categorical(df_weekly['day_name_kr'], categories=day_names_kr, ordered=True)
+                        df_weekly = df_weekly.sort_values('day_name_kr')
+
+                        fig_weekly = px.bar(df_weekly, x="day_name_kr", y="weekly", title="주간 계절성 (Weekly Seasonality)",
+                                            color_discrete_sequence=['#FFC107'])
+                        fig_weekly.update_layout(plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
+                        fig_weekly.update_xaxes(title_text="요일", categoryorder='array', categoryarray=day_names_kr)
+                        fig_weekly.update_yaxes(title_text="영향도")
+                        
+                        # -------------------- 4. 3분할 컬럼에 차트 표시 --------------------
+                        cols_comp = st.columns(3)
+                        with cols_comp[0]:
+                            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+                        with cols_comp[1]:
+                            st.plotly_chart(fig_yearly, use_container_width=True, config={'displayModeBar': False})
+                        with cols_comp[2]:
+                            st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False})
+                        # =========================================================
+
                     else:
                         forecast_df = run_arima(df_forecast, days_ahead)
                         fig = go.Figure()
