@@ -11,7 +11,6 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import ccf
 from sklearn.metrics import mean_squared_error
 import networkx as nx
-import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
 
@@ -19,7 +18,9 @@ warnings.filterwarnings("ignore")
 from analysis.api_manager import get_naver_trend_data
 from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
 
+# ===============================
 # 성능 지표 계산 함수
+# ===============================
 def mean_absolute_percentage_error(y_true, y_pred):
     epsilon = 1e-10
     y_true, y_pred = np.array(y_true), np.array(y_pred)
@@ -29,7 +30,7 @@ def root_mean_squared_error(y_true, y_pred):
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
 # ===============================
-# 🔁 자동 업데이트 함수
+# 자동 업데이트 함수
 # ===============================
 def auto_update_job():
     try:
@@ -135,7 +136,6 @@ with st.sidebar:
         st.info("자동 수집 기록이 없습니다.")
 
     st.markdown("#### 📈 최근 자동 수집 로그")
-    # glob은 실제 파일 시스템에 의존하므로, 로컬에서 실행 시 경로를 확인해야 합니다.
     csv_files = sorted(glob.glob("data/trend_data_*.csv"), key=os.path.getctime, reverse=True) if os.path.exists("data") else []
     log_df = pd.DataFrame([
         {"파일": os.path.basename(f), "생성시각": datetime.fromtimestamp(os.path.getctime(f))}
@@ -191,9 +191,7 @@ if merge_btn:
     if merged.empty:
         st.warning("병합할 CSV 파일이 없습니다.")
     else:
-        # 실제 파일 경로 대신 더미 처리
         merged_path = f"data/merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        # merged.to_csv(merged_path, index=False, encoding="utf-8-sig") # 실제 저장 로직 주석 처리
         df = merged
         st.success(f"🗂 CSV 병합 완료 → (파일 경로 생략)")
 
@@ -393,10 +391,7 @@ if df is not None and not df.empty:
                     xaxis_title=f"지연 (Lag, 일) | +Lag: {kw_a}가 {kw_b}를 선행",
                     yaxis_title="교차 상관 계수",
                     **PLOTLY_STYLE,
-                    # 기존: hovermode='x'가 PLOTLY_STYLE과 중복되어 오류 발생
-                    # 수정: hovermode 인수를 제거하거나, PLOTLY_STYLE에서 제외해야 함.
                 )
-                # PLOTLY_STYLE에 hovermode='x unified'가 있으므로 별도 인수를 제거합니다.
 
                 st.plotly_chart(fig_ccf, width='stretch')
 
@@ -448,21 +443,37 @@ if df is not None and not df.empty:
                 try:
                     if model_type == "Prophet":
                         model, forecast = run_prophet(df_forecast, days_ahead)
+                    
+                        # MAPE/RMSE 계산을 위한 실제값/예측값 추출
+                        y_true = df_forecast['y'].values
+                        y_pred = forecast['yhat'].head(len(y_true)).values
+                    
+                        # 예측 차트 표시 (width='stretch' -> use_container_width=True로 최적화)
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat"], mode="lines", name="예측값",
-                                                 line=dict(color="royalblue", width=2)))
+                                             line=dict(color="royalblue", width=2)))
                         fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_upper"], line=dict(width=0),
-                                                 fill=None, showlegend=False))
+                                             fill=None, showlegend=False))
                         fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_lower"],
-                                                 fill="tonexty", fillcolor="rgba(135,206,250,0.2)", line=dict(width=0),
-                                                 name="신뢰구간"))
+                                             fill="tonexty", fillcolor="rgba(135,206,250,0.2)", line=dict(width=0),
+                                             name="신뢰구간"))
                         fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
-                                                 name="실제값", line=dict(color="black", width=3)))
+                                             name="실제값", line=dict(color="black", width=3)))
                         fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True) # 최적화 적용
 
+                        # -------------------- 🌟 3. 모델 성능 지표 표시 (Prophet) --------------------
+                        mape = mean_absolute_percentage_error(y_true, y_pred)
+                        rmse = root_mean_squared_error(y_true, y_pred)
+
+                        st.markdown("#### 🌟 모델 성능 지표")
+                        col_metrics = st.columns(2)
+                        col_metrics[0].metric(label="MAPE (Mean Absolute Percentage Error)", value=f"{mape:.2f}%")
+                        col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
+                        st.caption("MAPE와 RMSE는 예측 기간을 제외한 과거 데이터에 대한 모델의 적합도를 나타냅니다.")
+                    
                         # =========================================================
-                        # ✨ 1. Prophet 기반 계절성 및 추세 분해 시각화 (수정 및 개선)
+                        # ✨ 1. Prophet 기반 계절성 및 추세 분해 시각화 
                         # =========================================================
                         st.divider()
                         st.subheader("✨ 트렌드 분해 분석 (Prophet)")
@@ -470,60 +481,73 @@ if df is not None and not df.empty:
 
                         # -------------------- 1. 장기 추세 (Trend) --------------------
                         fig_trend = px.line(forecast, x="ds", y="trend", title="장기 추세 (Trend)",
-                                            color_discrete_sequence=['#4CAF50'])
+                                        color_discrete_sequence=['#4CAF50'])
                         fig_trend.update_layout(plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
                         fig_trend.update_yaxes(title_text="영향도")
-                        
+                    
                         # -------------------- 2. 연간 계절성 (Yearly) --------------------
-                        # Prophet의 연간 계절성 패턴만 추출 (1년치 데이터)
-                        # Prophet은 예측 기간이 짧아도 전체 패턴을 보여주므로, 전체 forecast를 사용하거나,
-                        # 시계열의 패턴을 보여주는 관점에서 1년치 패턴을 추출하여 시각화합니다.
                         df_yearly_pattern = forecast[['ds', 'yearly']].tail(365).copy() 
                         fig_yearly = go.Figure()
                         fig_yearly.add_trace(go.Scatter(x=df_yearly_pattern["ds"], y=df_yearly_pattern["yearly"], mode="lines", name="연간 계절성", line=dict(color="#2196F3")))
                         fig_yearly.update_layout(title="연간 계절성 (Yearly Seasonality)", plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
                         fig_yearly.update_xaxes(title_text="날짜", tickformat="%m-%d") 
                         fig_yearly.update_yaxes(title_text="영향도")
-                        
+                    
                         # -------------------- 3. 주간 계절성 (Weekly) --------------------
-                        # Prophet의 주간 계절성 패턴만 추출 (7일 데이터)
                         df_weekly = forecast[["ds", "weekly"]].tail(7).copy()
-                        
-                        # 요일별 정렬을 위해 요일 이름 및 순서 정의 (한국어)
                         day_names_kr = ['월', '화', '수', '목', '금', '토', '일']
                         df_weekly['day_name_kr'] = df_weekly['ds'].dt.day_name(locale='en').map({
                             'Monday': '월', 'Tuesday': '화', 'Wednesday': '수', 'Thursday': '목', 
                             'Friday': '금', 'Saturday': '토', 'Sunday': '일'
                         })
-                        
+                    
                         df_weekly['day_name_kr'] = pd.Categorical(df_weekly['day_name_kr'], categories=day_names_kr, ordered=True)
                         df_weekly = df_weekly.sort_values('day_name_kr')
 
                         fig_weekly = px.bar(df_weekly, x="day_name_kr", y="weekly", title="주간 계절성 (Weekly Seasonality)",
-                                            color_discrete_sequence=['#FFC107'])
+                                        color_discrete_sequence=['#FFC107'])
                         fig_weekly.update_layout(plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
                         fig_weekly.update_xaxes(title_text="요일", categoryorder='array', categoryarray=day_names_kr)
                         fig_weekly.update_yaxes(title_text="영향도")
-                        
+                    
                         # -------------------- 4. 3분할 컬럼에 차트 표시 --------------------
                         cols_comp = st.columns(3)
                         with cols_comp[0]:
-                            st.plotly_chart(fig_trend, width='stretch', config={'displayModeBar': False})
+                            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
                         with cols_comp[1]:
-                            st.plotly_chart(fig_yearly, width='stretch', config={'displayModeBar': False})
+                            st.plotly_chart(fig_yearly, use_container_width=True, config={'displayModeBar': False})
                         with cols_comp[2]:
-                            st.plotly_chart(fig_weekly, width='stretch', config={'displayModeBar': False})
-                        # =========================================================
+                            st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False})
 
-                    else:
+                    else: # ARIMA 모델
                         forecast_df = run_arima(df_forecast, days_ahead)
+                    
+                        # ARIMA 모델 성능 측정을 위한 예측치 추출
+                        model_arima = ARIMA(df_forecast.set_index("ds"), order=(3, 1, 2))
+                        fitted_arima = model_arima.fit()
+                    
+                        y_true = df_forecast['y'].iloc[1:].values
+                        y_pred_past = fitted_arima.predict(start=1, end=len(df_forecast) - 1, dynamic=False).values
+                    
+                        # 예측 차트 표시 (width='stretch' -> use_container_width=True로 최적화)
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
-                                                 name="실제값", line=dict(color="black", width=3)))
+                                             name="실제값", line=dict(color="black", width=3)))
                         fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
-                                                 name="예측값", line=dict(color="royalblue", width=2.5, dash="dot")))
+                                             name="예측값", line=dict(color="royalblue", width=2.5, dash="dot")))
                         fig.update_layout(title=f"ARIMA 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True) # 최적화 적용
+                    
+                        # -------------------- 🌟 3. 모델 성능 지표 표시 (ARIMA) --------------------
+                        mape = mean_absolute_percentage_error(y_true, y_pred_past)
+                        rmse = root_mean_squared_error(y_true, y_pred_past)
+
+                        st.markdown("#### 🌟 모델 성능 지표")
+                        col_metrics = st.columns(2)
+                        col_metrics[0].metric(label="MAPE (Mean Absolute Percentage Error)", value=f"{mape:.2f}%")
+                        col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
+                        st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
+
                 except Exception as e:
                     st.error(f"❌ 예측 오류: {e}")
 
@@ -535,7 +559,6 @@ if df is not None and not df.empty:
 
 else:
     st.info("좌측에서 검색어를 입력하고 '업데이트'를 눌러주세요.")
-
 
 # ===============================
 # ⏰ 자동 업데이트 스케줄러
