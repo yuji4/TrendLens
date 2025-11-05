@@ -10,6 +10,7 @@ from prophet import Prophet
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import ccf
 from sklearn.metrics import mean_squared_error
+from sklearn.ensemble import RandomForestRegressor
 import networkx as nx
 
 warnings.filterwarnings("ignore")
@@ -28,6 +29,58 @@ def mean_absolute_percentage_error(y_true, y_pred):
 
 def root_mean_squared_error(y_true, y_pred):
     return np.sqrt(mean_squared_error(y_true, y_pred))
+
+# ===============================
+# 머신러닝 모델 함수 (Random Forest)
+# ===============================
+def create_features(df: pd.DataFrame) -> pd.DataFrame:
+    """날짜(ds) 컬럼에서 머신러닝 모델 학습을 위한 시간 피처를 생성합니다."""
+    df['dayofweek'] = df['ds'].dt.dayofweek    # 요일
+    df['month'] = df['ds'].dt.month            # 월
+    df['year'] = df['ds'].dt.year              # 연도
+    df['dayofyear'] = df['ds'].dt.dayofyear    # 연도 내 일수 
+    
+    if 'time_index' not in df.columns:
+        df['time_index'] = np.arange(len(df))
+        
+    return df
+
+@st.cache_data
+def run_random_forest(df: pd.DataFrame, days: int):
+    # 1. 학습 데이터 피처 생성
+    train_df = create_features(df.copy())
+    
+    # 2. 미래 데이터셋 준비 및 피처 생성
+    last_date = df['ds'].iloc[-1]
+    future_dates = pd.date_range(start=last_date, periods=days + 1, freq='D')[1:]
+    future_df = pd.DataFrame({'ds': future_dates})
+    future_df = create_features(future_df)
+    
+    # time_index 연속성 유지
+    last_index = train_df['time_index'].iloc[-1]
+    future_df['time_index'] = np.arange(len(future_df)) + last_index + 1
+    
+    # 3. 모델 학습
+    features = [c for c in train_df.columns if c not in ['ds', 'y']] 
+    X_train, y_train = train_df[features], train_df['y']
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+    model.fit(X_train, y_train)
+    
+    # 4. 예측 (과거 적합도 및 미래 예측)
+    y_pred_past = model.predict(X_train) 
+    X_future = future_df[features]
+    y_pred_future = model.predict(X_future)
+    
+    # 5. 피처 중요도 추출
+    feature_importances = model.feature_importances_
+    
+    # 결과 통합 (Streamlit 시각화용)
+    future_result = future_df[['ds']].rename(columns={'ds': '날짜'})
+    future_result['예측값'] = y_pred_future
+    
+    # 반환값 변경: future_result, y_true, y_pred_past, feature_importances, features 목록 반환
+    return future_result, y_train.values, y_pred_past, feature_importances, features
 
 # ===============================
 # 자동 업데이트 함수
@@ -415,9 +468,9 @@ if df is not None and not df.empty:
 
     # --- 탭 4: 예측 ---
     with tab4:
-        st.caption("Prophet / ARIMA 기반 미래 검색 트렌드 예측")
+        st.caption("Prophet / ARIMA / Random Forest 기반 미래 검색 트렌드 예측 및 비교 분석을 제공합니다.")
         st.subheader("🔮 트렌드 예측")
-        model_type = st.radio("모델 선택", ["Prophet", "ARIMA"], horizontal=True)
+        model_type = st.radio("모델 선택", ["Prophet", "ARIMA", "Random Forest"], horizontal=True)
         selected_kw = st.selectbox("예측할 키워드", [c for c in df.columns if c != "date"])
         days_ahead = st.slider("예측 기간 (일)", 7, 180, 30, 7)
         df_forecast = df[["date", selected_kw]].rename(columns={"date": "ds", selected_kw: "y"})
@@ -519,7 +572,7 @@ if df is not None and not df.empty:
                         with cols_comp[2]:
                             st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False})
 
-                    else: # ARIMA 모델
+                    elif model_type == "ARIMA":
                         forecast_df = run_arima(df_forecast, days_ahead)
                     
                         # ARIMA 모델 성능 측정을 위한 예측치 추출
@@ -547,7 +600,55 @@ if df is not None and not df.empty:
                         col_metrics[0].metric(label="MAPE (Mean Absolute Percentage Error)", value=f"{mape:.2f}%")
                         col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
                         st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
+                    elif model_type == "Random Forest":
+                        # 1. 예측 실행 및 피처 중요도 결과 반환
+                        forecast_df, y_true, y_pred_past, feature_importances, features = run_random_forest(df_forecast, days_ahead)
+                        
+                        # 2. 예측 차트 표시
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
+                                                 name="실제값", line=dict(color="black", width=3)))
+                        fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
+                                                 name="예측값", line=dict(color="#FF5722", width=2.5, dash="dot"))) # 주황색 계열
+                        fig.update_layout(title=f"Random Forest 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # 3. 모델 성능 지표 표시
+                        mape = mean_absolute_percentage_error(y_true, y_pred_past)
+                        rmse = root_mean_squared_error(y_true, y_pred_past)
+        
+                        st.markdown("#### 🌟 모델 성능 지표")
+                        col_metrics = st.columns(2)
+                        col_metrics[0].metric(label="MAPE (Mean Absolute Percentage Error)", value=f"{mape:.2f}%")
+                        col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
+                        st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
 
+                        # -------------------- 💡 피처 중요도 분석 시각화 --------------------
+                        st.divider()
+                        st.subheader("💡 피처 중요도 분석 (Random Forest)")
+                        st.caption("모델 예측에 가장 큰 영향을 미친 시간 피처의 기여도를 보여줍니다. (설명 가능성 확보)")
+                        
+                        importance_df = pd.DataFrame({
+                            'Feature': features,
+                            'Importance': feature_importances
+                        }).sort_values(by='Importance', ascending=True) # Bar chart를 위해 ascending=True
+                        
+                        # Plotly 막대 그래프로 시각화
+                        fig_import = px.bar(
+                            importance_df,
+                            x='Importance',
+                            y='Feature',
+                            orientation='h',
+                            title='검색량 예측에 기여한 시간 요인',
+                            color='Importance',
+                            color_continuous_scale=px.colors.sequential.Teal
+                        )
+                        fig_import.update_layout(
+                            plot_bgcolor='white', paper_bgcolor='#F5F5F5',
+                            margin=dict(l=20, r=20, t=30, b=20),
+                            font=dict(size=12)
+                        )
+                        st.plotly_chart(fig_import, use_container_width=True, config={'displayModeBar': False})
                 except Exception as e:
                     st.error(f"❌ 예측 오류: {e}")
 
