@@ -832,39 +832,109 @@ if df is not None and not df.empty:
             if st.button("🧾 PDF 리포트 생성", type="primary"):
                 try:
                     from io import BytesIO
-                    from reportlab.pdfgen import canvas
-                    from reportlab.lib.pagesizes import A4
-                    from reportlab.lib.units import cm
-                    from reportlab.lib import colors
 
                     buffer = BytesIO()
                     c = canvas.Canvas(buffer, pagesize=A4)
                     width, height = A4
 
+                    # PDF 본문 생성 로직
                     c.setFont("HYSMyeongJo-Medium", 18)
                     c.setFillColor(colors.HexColor("#0D47A1"))
-                    c.drawCentredString(width / 2, height - 2 * cm, "TrendLens 모델 성능 리포트")
+                    c.drawCentredString(width / 2, height - 2 * cm, "TrendLens 통합 분석 리포트")
 
                     c.setFont("HYSMyeongJo-Medium", 11)
                     c.setFillColor(colors.black)
                     c.drawString(2 * cm, height - 3 * cm, f"생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-                    data = pd.DataFrame(st.session_state["model_metrics"])
-                    start_y = height - 4 * cm
-                    c.setFont("HYSMyeongJo-Medium", 12)
-                    c.drawString(2 * cm, start_y, "모델별 성능 요약:")
+                    start_y = height - 4.5 * cm
 
+                    # 분석 개요
+                    c.setFont("HYSMyeongJo-Medium", 14)
+                    c.drawString(2 * cm, start_y, "1. 분석 개요")
                     start_y -= 0.7 * cm
+                    c.setFont("HYSMyeongJo-Medium", 10)
+                    c.drawString(2.5 * cm, start_y, f"- 분석 키워드: {', '.join(keywords)}")
+                    start_y -= 0.5 * cm
+                    c.drawString(2.5 * cm, start_y, f"- 조회 기간: {start_date} ~ {end_date} ({time_unit} 단위)")
+                    start_y -= 0.5 * cm
+                    c.drawString(2.5 * cm, start_y, f"- 조회 성별: {gender_display}")
+
+                    # 데이터 및 트렌드 요약
+                    start_y -= 1.0 * cm
+                    c.setFont("HYSMyeongJo-Medium", 14)
+                    c.drawString(2 * cm, start_y, "2. 데이터 및 트렌드 주요 요약")
+                    start_y -= 0.7 * cm
+
+                    c.setFont("HYSMyeongJo-Medium", 11)
+                    c.drawString(2.5 * cm, start_y, "트렌드 변화:")
+                    start_y -= 0.5 * cm
+                    c.setFont("HYSMyeongJo-Medium", 10)
+                    # 데이터프레임의 마지막 날짜 기준 순위 요약 (가장 높은 키워드 1개)
+                    last_ratios = df.tail(1).drop(columns='date', errors='ignore').iloc[0]
+                    top_kw = last_ratios.idxmax()
+                    c.drawString(3.0 * cm, start_y, f"- 현재 시점({df['date'].max().strftime('%Y-%m-%d')}) 검색량 최고 키워드: {top_kw}")
+
+                    # 상관 분석 요약
+                    start_y -= 0.7 * cm
+                    c.setFont("HYSMyeongJo-Medium", 11)
+                    c.drawString(2.5 * cm, start_y, "상관 분석:")
+                    start_y -= 0.5 * cm
+
+                    corr = df.set_index("date").corr()
+                    max_corr_pair = corr.unstack().sort_values(ascending=False).drop_duplicates()
+                    max_corr_pair = max_corr_pair[max_corr_pair < 1].head(1)
+
+                    if not max_corr_pair.empty:
+                        pair = max_corr_pair.index[0]
+                        value = max_corr_pair.iloc[0]
+                        c.setFont("HYSMyeongJo-Medium", 10)
+                        c.drawString(3.0 * cm, start_y, f"- 검색 패턴 유사도(Pearson) 최고: {pair[0]} - {pair[1]} (r={value:.3f})")
+                    else:
+                        c.setFont("HYSMyeongJo-Medium", 10)
+                        c.drawString(3.0 * cm, start_y, f"- 키워드가 1개 이하이거나, 계산 가능한 상관관계가 없습니다.")
+                    
+                    # 4. 모델 성능 요약
+                    start_y -= 1.0 * cm
+                    c.setFont("HYSMyeongJo-Medium", 14)
+                    c.drawString(2 * cm, start_y, "3. 예측 모델 성능 요약")
+                    start_y -= 0.7 * cm
+                
+                    data = pd.DataFrame(st.session_state["model_metrics"])
+
+                    # 키워드별 최적 모델 찾기
+                    best_models = data.loc[data.groupby('키워드')['RMSE'].idxmin()]
+                
+                    c.setFont("HYSMyeongJo-Medium", 11)
+                    c.drawString(2.5 * cm, start_y, "키워드별 최적 예측 모델 (RMSE 최소 기준):")
+                    start_y -= 0.5 * cm
+                
+                    if not best_models.empty:
+                        c.setFont("HYSMyeongJo-Medium", 10)
+                        for _, row in best_models.iterrows():
+                            c.drawString(3.0 * cm, start_y, f"- [{row['키워드']}]: {row['모델명']} (RMSE: {row['RMSE']:.3f}, MAPE: {row['MAPE(%)']:.2f}%)")
+                            start_y -= 0.5 * cm
+                    else:
+                        c.setFont("HYSMyeongJo-Medium", 10)
+                        c.drawString(3.0 * cm, start_y, f"- 예측 모델 성능 기록 없음.")
+
+                    # 상세 성능 지표
+                    start_y -= 1.0 * cm
+                    c.setFont("HYSMyeongJo-Medium", 14)
+                    c.drawString(2 * cm, start_y, "4. 상세 모델 성능 지표")
+                    start_y -= 0.7 * cm
+                
                     c.setFont("HYSMyeongJo-Medium", 10)
                     for i, row in data.iterrows():
                         line = f"- [{row['키워드']}] {row['모델명']} | MAPE: {row['MAPE(%)']}% | RMSE: {row['RMSE']} | {row['기록시간']}"
                         c.drawString(2.2 * cm, start_y, line)
                         start_y -= 0.5 * cm
+                    
                         if start_y < 2 * cm:  # 페이지 넘김 처리
                             c.showPage()
                             c.setFont("HYSMyeongJo-Medium", 10)
                             start_y = height - 3 * cm
 
+                    # 푸터
                     c.setFont("HYSMyeongJo-Medium", 9)
                     c.setFillColor(colors.gray)
                     c.drawString(2 * cm, 1.5 * cm, "Generated by TrendLens | Naver Trend Analysis Dashboard")
