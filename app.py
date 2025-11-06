@@ -76,8 +76,7 @@ def tune_random_forest_bayesian(X_train, y_train, n_trials=25):
 
     return best_model, best_params, study.best_value
 
-@st.cache_data
-def run_random_forest(df: pd.DataFrame, days: int):
+def run_random_forest(df: pd.DataFrame, days: int, tuned_model=None):
 
     # 1. 학습 데이터 피처 생성
     train_df = create_features(df.copy())
@@ -96,8 +95,11 @@ def run_random_forest(df: pd.DataFrame, days: int):
     features = [c for c in train_df.columns if c not in ['ds', 'y']] 
     X_train, y_train = train_df[features], train_df['y']
     
-    model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train)
+    if tuned_model is not None:
+        model = tuned_model
+    else: 
+        model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+        model.fit(X_train, y_train)
     
     # 4. 예측 (과거 적합도 및 미래 예측)
     y_pred_past = model.predict(X_train) 
@@ -113,6 +115,21 @@ def run_random_forest(df: pd.DataFrame, days: int):
     
     # 반환값 변경: future_result, y_true, y_pred_past, feature_importances, features 목록 반환
     return future_result, y_train.values, y_pred_past, feature_importances, features
+
+# ===============================
+# 모델 성능 기록 함수
+# ===============================
+def save_model_metrics(model_name, keyword, mape, rmse):
+    if "model_metrics" not in st.session_state:
+        st.session_state["model_metrics"] = []
+
+    st.session_state["model_metrics"].append({
+        "키워드": keyword,
+        "모델명": model_name,
+        "MAPE(%)": round(mape, 2),
+        "RMSE": round(rmse, 4),
+        "기록시간": datetime.now().strftime("%H:%M:%S")
+    })
 
 # ===============================
 # 자동 업데이트 함수
@@ -164,7 +181,6 @@ if enable_live:
 
 else:
     st.sidebar.info("⏸ 실시간 모드 비활성화 중")
-
 
 # ===============================
 # 전역 시각화 스타일
@@ -318,11 +334,12 @@ if df is not None and not df.empty:
 # 📊 메인 탭
 # ===============================
 if df is not None and not df.empty:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 트렌드 비교",
         "📈 상세 분석",
         "🔗 상관 분석",
         "🔮 트렌드 예측",
+        "📊 예측 모델 성능 비교",
         "⬇️ 다운로드"
     ])
 
@@ -534,6 +551,15 @@ if df is not None and not df.empty:
         days_ahead = st.slider("예측 기간 (일)", 7, 180, 30, 7)
         df_forecast = df[["date", selected_kw]].rename(columns={"date": "ds", selected_kw: "y"})
 
+        if model_type == "Random Forest":
+            st.markdown("#### 🌲 Random Forest 하이퍼파라미터 튜닝 설정")
+            tune = st.checkbox("Bayesian Optimizatin 기반 하이퍼파라미터 튜닝 실행", value=False)
+
+            if tune: 
+                n_trials = st.slider("탐색 시도 횟수", 10, 50, 25, 5)
+            else:
+                n_trials = None
+
         @st.cache_data
         def run_prophet(df, days):
             model = Prophet(yearly_seasonality=True, weekly_seasonality=True)
@@ -560,7 +586,7 @@ if df is not None and not df.empty:
                         y_true = df_forecast['y'].values
                         y_pred = forecast['yhat'].head(len(y_true)).values
                     
-                        # 예측 차트 표시 (width='stretch' -> use_container_width=True로 최적화)
+                        # 예측 차트 표시 (width='stretch' -> width='stretch'로 최적화)
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat"], mode="lines", name="예측값",
                                              line=dict(color="royalblue", width=2)))
@@ -572,11 +598,12 @@ if df is not None and not df.empty:
                         fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
                                              name="실제값", line=dict(color="black", width=3)))
                         fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True) # 최적화 적용
+                        st.plotly_chart(fig, width='stretch') # 최적화 적용
 
                         # -------------------- 🌟 3. 모델 성능 지표 표시 (Prophet) --------------------
                         mape = mean_absolute_percentage_error(y_true, y_pred)
                         rmse = root_mean_squared_error(y_true, y_pred)
+                        save_model_metrics("Prophet", selected_kw, mape, rmse)
 
                         st.markdown("#### 🌟 모델 성능 지표")
                         col_metrics = st.columns(2)
@@ -625,11 +652,11 @@ if df is not None and not df.empty:
                         # -------------------- 4. 3분할 컬럼에 차트 표시 --------------------
                         cols_comp = st.columns(3)
                         with cols_comp[0]:
-                            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_trend, width='stretch', config={'displayModeBar': False})
                         with cols_comp[1]:
-                            st.plotly_chart(fig_yearly, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_yearly, width='stretch', config={'displayModeBar': False})
                         with cols_comp[2]:
-                            st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_weekly, width='stretch', config={'displayModeBar': False})
 
                     elif model_type == "ARIMA":
                         forecast_df = run_arima(df_forecast, days_ahead)
@@ -641,18 +668,20 @@ if df is not None and not df.empty:
                         y_true = df_forecast['y'].iloc[1:].values
                         y_pred_past = fitted_arima.predict(start=1, end=len(df_forecast) - 1, dynamic=False).values
                     
-                        # 예측 차트 표시 (width='stretch' -> use_container_width=True로 최적화)
+                        # 예측 차트 표시 (width='stretch' -> width='stretch'로 최적화)
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
                                              name="실제값", line=dict(color="black", width=3)))
                         fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
                                              name="예측값", line=dict(color="royalblue", width=2.5, dash="dot")))
                         fig.update_layout(title=f"ARIMA 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True) # 최적화 적용
+                        st.plotly_chart(fig, width='stretch') # 최적화 적용
                     
                         # -------------------- 🌟 3. 모델 성능 지표 표시 (ARIMA) --------------------
                         mape = mean_absolute_percentage_error(y_true, y_pred_past)
                         rmse = root_mean_squared_error(y_true, y_pred_past)
+                        save_model_metrics("ARIMA", selected_kw, mape, rmse)
+
 
                         st.markdown("#### 🌟 모델 성능 지표")
                         col_metrics = st.columns(2)
@@ -660,39 +689,37 @@ if df is not None and not df.empty:
                         col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
                         st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
                     elif model_type == "Random Forest":
+                        tuned_model = None
                         st.subheader("🌲 Random Forest 예측 및 Bayesian 튜닝")
                         
-                        # 튜닝 옵션
-                        tune = st.checkbox("Bayesian Optimization 기반 하이퍼파라미터 튜닝 실행", value=False)
-                        n_trials = st.slider("탐색 시도 횟수", 10, 50, 25, 5) if tune else None
-
-                        # 기본 피처
-                        train_df = create_features(df_forecast.copy())
-                        features_x = [c for c in train_df.columns if c not in ['ds', 'y']]
-                        X_train, y_train = train_df[features_x], train_df['y']
-
-                        forecast_df, y_true, y_pred_past, feature_importances, features = run_random_forest(df_forecast, days_ahead)
-
                         if tune:
                             with st.spinner("Optuna Bayesian Optimization 튜닝 중... ⏳"):
-                                best_model, best_params, best_score = tune_random_forest_bayesian(X_train, y_train, n_trials=n_trials)
-                                st.success("🎯 Bayesian Optimization 완료!")
-                                st.json(best_params)
-                                st.caption(f"최적 MSE: {best_score:.4f}")
+                                train_df_rf = create_features(df_forecast.copy())
+                                features_x_rf = [c for c in train_df_rf.columns if c not in ['ds', 'y']]
+                                X_train_rf, y_train_rf = train_df_rf[features_x_rf], train_df_rf['y']
+                                
+                                best_model, best_params, best_score = tune_random_forest_bayesian(X_train_rf, y_train_rf, n_trials=n_trials)
+                            
+                            st.success("🎯 Bayesian Optimization 완료!")
+                            st.json(best_params)
+                            st.caption(f"최적 MSE: {best_score:.4f}")
+                            tuned_model = best_model
+                            
+                            # 최적 모델을 사용했으므로, X_train_rf로 과거 예측값 재계산
+                            y_pred_past_rf = tuned_model.predict(X_train_rf)
+                        else:
+                            # 튜닝 안 할 경우 기본 모델로 과거 예측값 계산
+                            model_default = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                            train_df_rf = create_features(df_forecast.copy())
+                            features_x_rf = [c for c in train_df_rf.columns if c not in ['ds', 'y']]
+                            X_train_rf, y_train_rf = train_df_rf[features_x_rf], train_df_rf['y']
+                            model_default.fit(X_train_rf, y_train_rf)
+                            y_pred_past_rf = model_default.predict(X_train_rf)
+                            tuned_model = model_default
 
-                                # 최적 모델로 재학습 후 예측
-                                future_df = create_features(pd.DataFrame({
-                                    "ds": pd.date_range(start=df_forecast["ds"].iloc[-1], periods=days_ahead + 1, freq="D")[1:]
-                                }))
-                                future_df['time_index'] = np.arange(len(future_df)) + len(df_forecast)
-                                X_future = future_df[features_x]
-                                y_pred_future = best_model.predict(X_future)
-                                forecast_df = future_df[['ds']].rename(columns={'ds': '날짜'})
-                                forecast_df['예측값'] = y_pred_future
+                        # ⭐ 예측 실행 (run_random_forest 함수에 튜닝된 모델 전달)
+                        forecast_df, y_true, y_pred_past, feature_importances, features = run_random_forest(df_forecast, days_ahead, tuned_model=tuned_model)
 
-                                feature_importances = best_model.feature_importances_
-                                features = X_train.columns
-                        
                         # 2. 예측 차트 표시
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
@@ -703,8 +730,9 @@ if df is not None and not df.empty:
                         st.plotly_chart(fig, use_container_width=True)
                         
                         # 3. 모델 성능 지표 표시
-                        mape = mean_absolute_percentage_error(y_true, y_pred_past)
+                        mape = mean_absolute_percentage_error(y_true, y_pred_past) # y_pred_past는 튜닝 결과 반영
                         rmse = root_mean_squared_error(y_true, y_pred_past)
+                        save_model_metrics("Random Forest", selected_kw, mape, rmse) # ⭐ 키워드 인자 추가
         
                         st.markdown("#### 🌟 모델 성능 지표")
                         col_metrics = st.columns(2)
@@ -720,7 +748,7 @@ if df is not None and not df.empty:
                         importance_df = pd.DataFrame({
                             'Feature': features,
                             'Importance': feature_importances
-                        }).sort_values(by='Importance', ascending=True) # Bar chart를 위해 ascending=True
+                        }).sort_values(by='Importance', ascending=True)
                         
                         # Plotly 막대 그래프로 시각화
                         fig_import = px.bar(
@@ -738,11 +766,51 @@ if df is not None and not df.empty:
                             font=dict(size=12)
                         )
                         st.plotly_chart(fig_import, use_container_width=True, config={'displayModeBar': False})
+                       
                 except Exception as e:
                     st.error(f"❌ 예측 오류: {e}")
 
-    # --- 탭 5: 다운로드 ---
+    # --- 탭 5: 모델 성능 비교 ---
     with tab5:
+        st.subheader("📊 모델별 성능 비교 대시보드")
+
+        if "model_metrics" not in st.session_state or len(st.session_state["model_metrics"]) == 0:
+            st.info("아직 저장된 모델 성능 데이터가 없습니다. 예측을 먼저 실행하세요.")
+        else:
+            df_metrics = pd.DataFrame(st.session_state["model_metrics"])
+            
+            available_keywords = df_metrics["키워드"].unique()
+            try:
+                default_index = list(available_keywords).index(selected_kw)
+            except ValueError:
+                default_index = 0
+            selected_comparison_kw = st.selectbox("키워드 선택 (비교 대상)", available_keywords, index=default_index)
+
+            df_filtered = df_metrics[df_metrics["키워드"] == selected_comparison_kw]
+            st.dataframe(df_filtered, width='stretch')
+            
+            if not df_filtered.empty:
+                # 최적 모델 찾기
+                best_row = df_filtered.loc[df_filtered["RMSE"].idxmin()]
+                st.success(f"🏆 키워드 **'{selected_comparison_kw}'**에 대한 최적 모델: **{best_row['모델명']}** (RMSE {best_row['RMSE']:.4f})")
+
+                # 시각화(RMSE / MAPE 비교)
+                st.markdown("#### RMSE 비교")
+                fig_rmse = px.bar(df_filtered, x="모델명", y="RMSE", color="모델명",
+                                    text="RMSE", title=f"'{selected_comparison_kw}' 모델별 RMSE 비교", color_discrete_sequence=px.colors.qualitative.Set2)
+                fig_rmse.update_layout(**PLOTLY_STYLE)
+                st.plotly_chart(fig_rmse, use_container_width=True)
+
+                st.markdown("### MAPE 비교")
+                fig_mape = px.bar(df_filtered, x="모델명", y="MAPE(%)", color="모델명",
+                                    text="MAPE(%)", title=f"'{selected_comparison_kw}' 모델별 MAPE 비교", color_discrete_sequence=px.colors.qualitative.Pastel)
+                fig_mape.update_layout(**PLOTLY_STYLE)
+                st.plotly_chart(fig_mape, use_container_width=True)
+            else:
+                st.info(f"키워드 '{selected_comparison_kw}'에 대해 저장된 측정값이 없습니다. 예측을 실행하여 저장하세요.")
+
+    # --- 탭 6: 다운로드 ---
+    with tab6:
         st.subheader("⬇️ CSV 다운로드")
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button("💾 최신 데이터 다운로드", csv, "trend_data_latest.csv", "text/csv")
