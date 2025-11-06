@@ -3,8 +3,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import networkx as nx
+import optuna
 from datetime import date, timedelta, datetime
-from time import sleep
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, os, glob, warnings
 from prophet import Prophet
@@ -12,7 +13,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import ccf
 from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
-import networkx as nx
+from sklearn.model_selection import cross_val_score
 
 warnings.filterwarnings("ignore")
 
@@ -47,7 +48,37 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 @st.cache_data
+def tune_random_forest_bayesian(X_train, y_train, n_trials=25):
+    # Optuna 기반 베이지안 최적화로 RandomForest 하이퍼파라미터 튜닝
+    def objective(trial):
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 400),
+            "max_depth": trial.suggest_int("max_depth", 3, 15),
+            "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
+            "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 5),
+            "max_features": trial.suggest_float("max_features", 0.5, 1.0),
+            "random_state": 42,
+            "n_jobs": -1,
+        }
+        model = RandomForestRegressor(**params)
+        scores = cross_val_score(
+            model, X_train, y_train, 
+            scoring="neg_mean_squared_error", cv=3, n_jobs=-1
+        )
+        return -np.mean(scores)  # 최소화된 MSE
+    
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+
+    best_params = study.best_params
+    best_model = RandomForestRegressor(**best_params)
+    best_model.fit(X_train, y_train)
+
+    return best_model, best_params, study.best_value
+
+@st.cache_data
 def run_random_forest(df: pd.DataFrame, days: int):
+
     # 1. 학습 데이터 피처 생성
     train_df = create_features(df.copy())
     
@@ -629,8 +660,38 @@ if df is not None and not df.empty:
                         col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
                         st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
                     elif model_type == "Random Forest":
-                        # 1. 예측 실행 및 피처 중요도 결과 반환
+                        st.subheader("🌲 Random Forest 예측 및 Bayesian 튜닝")
+                        
+                        # 튜닝 옵션
+                        tune = st.checkbox("Bayesian Optimization 기반 하이퍼파라미터 튜닝 실행", value=False)
+                        n_trials = st.slider("탐색 시도 횟수", 10, 50, 25, 5) if tune else None
+
+                        # 기본 피처
+                        train_df = create_features(df_forecast.copy())
+                        features_x = [c for c in train_df.columns if c not in ['ds', 'y']]
+                        X_train, y_train = train_df[features_x], train_df['y']
+
                         forecast_df, y_true, y_pred_past, feature_importances, features = run_random_forest(df_forecast, days_ahead)
+
+                        if tune:
+                            with st.spinner("Optuna Bayesian Optimization 튜닝 중... ⏳"):
+                                best_model, best_params, best_score = tune_random_forest_bayesian(X_train, y_train, n_trials=n_trials)
+                                st.success("🎯 Bayesian Optimization 완료!")
+                                st.json(best_params)
+                                st.caption(f"최적 MSE: {best_score:.4f}")
+
+                                # 최적 모델로 재학습 후 예측
+                                future_df = create_features(pd.DataFrame({
+                                    "ds": pd.date_range(start=df_forecast["ds"].iloc[-1], periods=days_ahead + 1, freq="D")[1:]
+                                }))
+                                future_df['time_index'] = np.arange(len(future_df)) + len(df_forecast)
+                                X_future = future_df[features_x]
+                                y_pred_future = best_model.predict(X_future)
+                                forecast_df = future_df[['ds']].rename(columns={'ds': '날짜'})
+                                forecast_df['예측값'] = y_pred_future
+
+                                feature_importances = best_model.feature_importances_
+                                features = X_train.columns
                         
                         # 2. 예측 차트 표시
                         fig = go.Figure()
@@ -654,7 +715,7 @@ if df is not None and not df.empty:
                         # -------------------- 💡 피처 중요도 분석 시각화 --------------------
                         st.divider()
                         st.subheader("💡 피처 중요도 분석 (Random Forest)")
-                        st.caption("모델 예측에 가장 큰 영향을 미친 시간 피처의 기여도를 보여줍니다. (설명 가능성 확보)")
+                        st.caption("모델 예측에 가장 큰 영향을 미친 시간 피처의 기여도를 보여줍니다.")
                         
                         importance_df = pd.DataFrame({
                             'Feature': features,
@@ -693,9 +754,6 @@ else:
 # ⏰ 자동 업데이트 스케줄러
 # ===============================
 scheduler = BackgroundScheduler()
-if enable_live:
-    scheduler.add_job(auto_update_job, "interval", minutes=max(1, refresh_interval))
-else:
-    scheduler.add_job(auto_update_job, "interval", hours = 24)
+scheduler.add_job(auto_update_job, "interval", hours=24)
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())

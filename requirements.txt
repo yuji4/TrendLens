@@ -9,3 +9,4 @@ apscheduler
 networkx
 prophet
 statsmodels
+optuna
