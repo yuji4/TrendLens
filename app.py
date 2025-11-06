@@ -300,6 +300,11 @@ if not keywords:
 df = None
 
 if update_btn:
+    # 키워트 세트 변경 시, 이전 예측 기록 초기화
+    if "model_metrics" in st.session_state:
+        st.session_state["model_metrics"].clear()
+        st.info("🔄 키워드 세트 변경 감지: 기존 모델 성능 데이터 초기화 완료")
+
     with st.spinner("데이터를 가져오는 중..."):
         try:
             data = get_naver_trend_data(
@@ -830,7 +835,31 @@ if df is not None and not df.empty:
             st.info("모델 성능 데이터가 없습니다. 예측을 먼저 실행하세요.")
         else:
             if st.button("🧾 PDF 리포트 생성", type="primary"):
+                
+                os.makedirs("temp", exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                image_path = os.path.join("temp", f"trend_chart_{timestamp}.png")
                 try:
+                    df_vis_report = df.copy()
+                    df_long_report = df_vis_report.melt(id_vars="date", var_name="keyword", value_name="ratio")
+                    fig_report = px.line(
+                        df_long_report, 
+                        x="date", 
+                        y="ratio", 
+                        color="keyword",
+                        markers=True,
+                        title="키워드별 트렌드 변화 (Trend Comparison)",
+                        color_discrete_sequence=px.colors.qualitative.Set2
+                    )
+                    fig_report.update_layout(
+                        paper_bgcolor="white", 
+                        plot_bgcolor="white",
+                        font=dict(color="black"),
+                        margin=dict(l=40, r=30, t=60, b=40),
+                        legend=dict(orientation="h", y=-0.2)
+                    )
+                    fig_report.write_image(image_path, scale=2, engine="kaleido")
+
                     from io import BytesIO
 
                     buffer = BytesIO()
@@ -869,7 +898,7 @@ if df is not None and not df.empty:
                     c.drawString(2.5 * cm, start_y, "트렌드 변화:")
                     start_y -= 0.5 * cm
                     c.setFont("HYSMyeongJo-Medium", 10)
-                    # 데이터프레임의 마지막 날짜 기준 순위 요약 (가장 높은 키워드 1개)
+                    
                     last_ratios = df.tail(1).drop(columns='date', errors='ignore').iloc[0]
                     top_kw = last_ratios.idxmax()
                     c.drawString(3.0 * cm, start_y, f"- 현재 시점({df['date'].max().strftime('%Y-%m-%d')}) 검색량 최고 키워드: {top_kw}")
@@ -893,13 +922,30 @@ if df is not None and not df.empty:
                         c.setFont("HYSMyeongJo-Medium", 10)
                         c.drawString(3.0 * cm, start_y, f"- 키워드가 1개 이하이거나, 계산 가능한 상관관계가 없습니다.")
                     
-                    # 4. 모델 성능 요약
                     start_y -= 1.0 * cm
                     c.setFont("HYSMyeongJo-Medium", 14)
-                    c.drawString(2 * cm, start_y, "3. 예측 모델 성능 요약")
+                    c.drawString(2 * cm, start_y, "3. 트렌드 비교 시각화")
+                    start_y -= 0.5 * cm
+
+                    if os.path.exists(image_path):
+                        image_width = width - 4 * cm
+                        image_height = image_width * 0.5
+
+                        if start_y - image_height < 4 * cm:
+                            c.showPage()
+                            start_y = height - 3 * cm
+                        c.drawImage(image_path, 2 * cm, start_y - image_height, width=image_width, height=image_height)
+                        start_y -= image_height + 0.5 * cm
+
+                    # 모델 성능 요약
+                    start_y -= 1.0 * cm
+                    c.setFont("HYSMyeongJo-Medium", 14)
+                    c.drawString(2 * cm, start_y, "4. 예측 모델 성능 요약")
                     start_y -= 0.7 * cm
-                
+
                     data = pd.DataFrame(st.session_state["model_metrics"])
+                    data = data.sort_values(by="기록시간", ascending=False)
+                    data = data.groupby("키워드", as_index=False).first()
 
                     # 키워드별 최적 모델 찾기
                     best_models = data.loc[data.groupby('키워드')['RMSE'].idxmin()]
@@ -920,7 +966,7 @@ if df is not None and not df.empty:
                     # 상세 성능 지표
                     start_y -= 1.0 * cm
                     c.setFont("HYSMyeongJo-Medium", 14)
-                    c.drawString(2 * cm, start_y, "4. 상세 모델 성능 지표")
+                    c.drawString(2 * cm, start_y, "5. 상세 모델 성능 지표")
                     start_y -= 0.7 * cm
                 
                     c.setFont("HYSMyeongJo-Medium", 10)
@@ -941,6 +987,8 @@ if df is not None and not df.empty:
 
                     c.save()
                     buffer.seek(0)
+                    if os.path.exists(image_path):
+                        os.remove(image_path)
 
                     st.download_button(
                         label="📥 리포트 다운로드 (PDF)",
@@ -953,7 +1001,7 @@ if df is not None and not df.empty:
                     st.error(f"PDF 생성 중 오류 발생: {e}")
 
 else:
-    st.info("좌측에서 검색어s를 입력하고 '업데이트'를 눌러주세요.")
+    st.info("좌측에서 검색어를 입력하고 '업데이트'를 눌러주세요.")
 
 # ===============================
 # ⏰ 자동 업데이트 스케줄러

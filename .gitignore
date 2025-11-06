@@ -3,9 +3,8 @@
 .venv
 .venv/
 
-# 데이터 저장 폴더(실제 데이터와 테스트 데이터 분리)
+# 데이터 저장 폴더
 data/
-data_test/
 
 # Python 캐시 파일
 __pycache__/
