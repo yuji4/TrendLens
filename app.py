@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from datetime import date, timedelta, datetime
+from time import sleep
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, os, glob, warnings
 from prophet import Prophet
@@ -105,6 +106,33 @@ def auto_update_job():
             print("⚠️ [자동 수집 실패] 응답 없음")
     except Exception as e:
         print(f"❌ 자동 업데이트 오류: {e}")
+
+# ===============================
+# 실시간 자동 새로고침 옵션
+# ===============================
+st.sidebar.markdown("### ⚡ 실시간 모드 설정")
+
+# 새로고침 간격(초 단위)
+refresh_interval = st.sidebar.slider("자동 새로고침 주기 (초)", 30, 600, 60, step=30)
+enable_live = st.sidebar.toggle("실시간 데이터 갱신 활성화", value=False, help="네이버 트렌드 데이터를 주기적으로 갱신합니다.")
+
+if enable_live:
+    st.sidebar.success(f"✅ 실시간 모드 ON ({refresh_interval}초 간격)")
+    st.sidebar.caption(f"마지막 새로고침: {datetime.now().strftime('%H:%M:%S')}")
+
+    st.markdown(
+        f"""
+        <script>
+        setTimeout(function() {{
+            window.location.reload();
+        }}, {refresh_interval * 1000});
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+else:
+    st.sidebar.info("⏸ 실시간 모드 비활성화 중")
 
 
 # ===============================
@@ -246,7 +274,7 @@ if merge_btn:
     else:
         merged_path = f"data/merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         df = merged
-        st.success(f"🗂 CSV 병합 완료 → (파일 경로 생략)")
+        st.success(f"🗂 CSV 병합 완료")
 
 if df is not None and not df.empty:
     df["date"] = pd.to_datetime(df["date"])
@@ -665,6 +693,9 @@ else:
 # ⏰ 자동 업데이트 스케줄러
 # ===============================
 scheduler = BackgroundScheduler()
-scheduler.add_job(auto_update_job, "interval", hours=24)
+if enable_live:
+    scheduler.add_job(auto_update_job, "interval", minutes=max(1, refresh_interval))
+else:
+    scheduler.add_job(auto_update_job, "interval", hours = 24)
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())

@@ -94,6 +94,7 @@ def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
         print(f"ERROR: 최신 CSV 파일 로드 실패: {e}")
         return pd.DataFrame()
     
+
 def collapse_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
     # 접미사 제거 후 같은 이름 컬럼은 평균으로 통합
     new_cols = [re.sub(r'_dup(\.\d+)?$', '', c) for c in df.columns]
@@ -102,6 +103,7 @@ def collapse_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
     if len(set(new_cols)) != len(new_cols): 
         df = df.T.groupby(level=0).mean(numeric_only=True).T
     return df
+
 
 def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
     '''
@@ -139,6 +141,7 @@ def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
     print(f"INFO: {len(file_list)}개의 CSV 병합 완료 (총 {len(merged)}행)")
     return merged
     
+
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     '''
     기본적인 데이터 클리닝 수행
@@ -160,6 +163,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     print(f"INFO: 클리닝 완료 (남은 행 수: {len(df)})")
     return df
 
+
 def summarize_data(df: pd.DataFrame):
     '''
     키워드별 평균, 최대, 최소값 요약 통계 출력
@@ -172,6 +176,9 @@ def summarize_data(df: pd.DataFrame):
     summary = df[numeric_cols].agg(['mean', 'max', 'min']).T.round(2)
     return summary
     
+
+
+
 if __name__ == '__main__':
     print("--- Data Manager Module Test (더미 데이터 사용) ---")
 
