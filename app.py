@@ -18,8 +18,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 warnings.filterwarnings("ignore")
+pdfmetrics.registerFont(UnicodeCIDFont('HYSMyeongJo-Medium'))
 
 # 내부 모듈 
 from analysis.api_manager import get_naver_trend_data
@@ -140,7 +143,7 @@ def save_model_metrics(model_name, keyword, mape, rmse):
 # ===============================
 def auto_update_job():
     try:
-        keywords = ["Python", "AI", "Study"]
+        keywords = ["봄", "여름", "가을", "겨울"]
         today = date.today()
         start = today - timedelta(days=7)
         data = get_naver_trend_data(
@@ -238,7 +241,7 @@ st.title("👀 TrendLens: 네이버 검색 트렌드 분석")
 # ===============================
 with st.sidebar:
     st.markdown("### ⚙️ 기본 설정")
-    raw_keywords = st.text_input("검색어 입력 (쉼표로 구분)", "Python, AI, Study")
+    raw_keywords = st.text_input("검색어 입력 (쉼표로 구분)", "봄, 여름, 가을, 겨울")
     time_unit = st.selectbox("데이터 단위", ["date", "week", "month"])
 
     today = date.today()
@@ -731,7 +734,7 @@ if df is not None and not df.empty:
                         fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
                                                  name="예측값", line=dict(color="#FF5722", width=2.5, dash="dot"))) # 주황색 계열
                         fig.update_layout(title=f"Random Forest 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                         
                         # 3. 모델 성능 지표 표시
                         mape = mean_absolute_percentage_error(y_true, y_pred_past) # y_pred_past는 튜닝 결과 반영
@@ -769,7 +772,7 @@ if df is not None and not df.empty:
                             margin=dict(l=20, r=20, t=30, b=20),
                             font=dict(size=12)
                         )
-                        st.plotly_chart(fig_import, use_container_width=True, config={'displayModeBar': False})
+                        st.plotly_chart(fig_import, width='stretch', config={'displayModeBar': False})
                        
                 except Exception as e:
                     st.error(f"❌ 예측 오류: {e}")
@@ -803,13 +806,13 @@ if df is not None and not df.empty:
                 fig_rmse = px.bar(df_filtered, x="모델명", y="RMSE", color="모델명",
                                     text="RMSE", title=f"'{selected_comparison_kw}' 모델별 RMSE 비교", color_discrete_sequence=px.colors.qualitative.Set2)
                 fig_rmse.update_layout(**PLOTLY_STYLE)
-                st.plotly_chart(fig_rmse, use_container_width=True)
+                st.plotly_chart(fig_rmse, width='stretch')
 
                 st.markdown("### MAPE 비교")
                 fig_mape = px.bar(df_filtered, x="모델명", y="MAPE(%)", color="모델명",
                                     text="MAPE(%)", title=f"'{selected_comparison_kw}' 모델별 MAPE 비교", color_discrete_sequence=px.colors.qualitative.Pastel)
                 fig_mape.update_layout(**PLOTLY_STYLE)
-                st.plotly_chart(fig_mape, use_container_width=True)
+                st.plotly_chart(fig_mape, width='stretch')
             else:
                 st.info(f"키워드 '{selected_comparison_kw}'에 대해 저장된 측정값이 없습니다. 예측을 실행하여 저장하세요.")
 
@@ -838,31 +841,31 @@ if df is not None and not df.empty:
                     c = canvas.Canvas(buffer, pagesize=A4)
                     width, height = A4
 
-                    c.setFont("Helvetica-Bold", 18)
+                    c.setFont("HYSMyeongJo-Medium", 18)
                     c.setFillColor(colors.HexColor("#0D47A1"))
-                    c.drawCentredString(width / 2, height - 2 * cm, "📊 TrendLens 모델 성능 리포트")
+                    c.drawCentredString(width / 2, height - 2 * cm, "TrendLens 모델 성능 리포트")
 
-                    c.setFont("Helvetica", 11)
+                    c.setFont("HYSMyeongJo-Medium", 11)
                     c.setFillColor(colors.black)
                     c.drawString(2 * cm, height - 3 * cm, f"생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
                     data = pd.DataFrame(st.session_state["model_metrics"])
                     start_y = height - 4 * cm
-                    c.setFont("Helvetica-Bold", 12)
+                    c.setFont("HYSMyeongJo-Medium", 12)
                     c.drawString(2 * cm, start_y, "모델별 성능 요약:")
 
                     start_y -= 0.7 * cm
-                    c.setFont("Helvetica", 10)
+                    c.setFont("HYSMyeongJo-Medium", 10)
                     for i, row in data.iterrows():
                         line = f"- [{row['키워드']}] {row['모델명']} | MAPE: {row['MAPE(%)']}% | RMSE: {row['RMSE']} | {row['기록시간']}"
                         c.drawString(2.2 * cm, start_y, line)
                         start_y -= 0.5 * cm
                         if start_y < 2 * cm:  # 페이지 넘김 처리
                             c.showPage()
-                            c.setFont("Helvetica", 10)
+                            c.setFont("HYSMyeongJo-Medium", 10)
                             start_y = height - 3 * cm
 
-                    c.setFont("Helvetica-Oblique", 9)
+                    c.setFont("HYSMyeongJo-Medium", 9)
                     c.setFillColor(colors.gray)
                     c.drawString(2 * cm, 1.5 * cm, "Generated by TrendLens | Naver Trend Analysis Dashboard")
 
