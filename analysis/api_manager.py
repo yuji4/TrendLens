@@ -1,7 +1,9 @@
 import os
 import requests
 import json
+import re
 from dotenv import load_dotenv
+from datetime import datetime
 
 # .env에서 환경 변수 로드
 load_dotenv()
@@ -15,6 +17,15 @@ def get_naver_api_keys():
 
     if not client_id or not client_secret:
         print("오류: .env 파일에서 NAVER_CLIENT_ID 또는 NAVER_CLIENT_SECRET를 찾을 수 없습니다.")
+        return None, None
+    
+    return client_id, client_secret
+
+def get_naver_news_api_keys():
+    client_id = os.environ.get('NAVER_NEWS_CLIENT_ID')
+    client_secret = os.environ.get('NAVER_NEWS_CLIENT_SECRET')
+    if not client_id or not client_secret:
+        print("오류: .env 파일에서 NAVER_NEWS_CLIENT_ID 또는 NAVER_NEWS_CLIENT_SECRET를 찾을 수 없습니다.")
         return None, None
     
     return client_id, client_secret
@@ -88,6 +99,87 @@ def get_naver_trend_data(
     except requests.exceptions.RequestException as e:
         print(f"ERROR: API 요청 실패 - {e}")
         return {}
+    
+def get_naver_news_count(keyword: str, target_date_str: str) -> int:
+    # 네이버 뉴스 검색 API를 이용해 특정 키워드의 일자별 뉴스 개수 반환
+    client_id, client_secret = get_naver_news_api_keys()
+    if not client_id or not client_secret:
+        return 0
+    
+    search_url = "https://openapi.naver.com/v1/search/news.json"
+    headers = {
+        "X-naver-Client-Id": client_id,
+        "X-naver-Client-Secret": client_secret
+    }
+
+    try:
+        target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        print(f"ERROR: 잘못된 날짜 형식입니다: {target_date_str}")
+        return 
+    
+    target_count = 0
+    start = 1
+    display = 100
+    max_api_limit = 1000
+
+    while start <= max_api_limit:
+        params = {
+            "query": keyword,
+            "display": display,
+            "start": start,
+            "sort": "date" # 최신순 정렬
+        }
+
+        try:
+            response = requests.get(search_url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            items = data.get("items", [])
+            if not items:
+                break
+
+            found_on_target_date = 0
+            
+            for item in items:
+                # pubDate 포맷: 'Mon, 01 Jan 2024 09:00:00 +0900'
+                pub_date_str = item.get("pubDate")
+                
+                # pubDate 파싱 (요일, 일 월 연도 시:분:초 타임존)
+                try:
+                    # RFC 2822 형식 파싱
+                    item_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %z").date()
+                except ValueError:
+                    # 파싱 실패 시 예외 처리
+                    print(f"경고: 날짜 파싱 실패 - {pub_date_str}")
+                    continue
+
+                if item_date == target_date:
+                    found_on_target_date += 1
+                elif item_date < target_date:
+                    # 최신순 정렬이므로, 목표 날짜보다 이전 날짜가 나오면 검색 중단
+                    start = max_api_limit + 1 # 루프 강제 종료
+                    break
+
+            target_count += found_on_target_date
+
+            if found_on_target_date < display:
+                # 현재 페이지에서 목표 날짜의 뉴스가 100건 미만이면 다음 페이지에도 없을 확률이 높음
+                # 하지만 정확도를 위해 API 한도까지는 계속 확인하는 것이 좋음.
+                pass 
+            
+            if start > max_api_limit: # 루프가 이미 종료되도록 설정된 경우
+                break
+
+            start += display
+        except requests.exceptions.RequestException as e:
+            print(f"ERROR: 뉴스 API 요청 실패 - {e}")
+            break
+            
+    print(f"INFO: [{keyword}] {target_date_str} 뉴스 언급량: {target_count}건")
+    return target_count
+
 
 if __name__ == "__main__":
     print("--- Naver API Key Load Test ---")
@@ -116,5 +208,26 @@ if __name__ == "__main__":
             print(json.dumps(test_data, indent=2)[:500] + "...") 
         else:
             print("\n❌ API 호출 실패. 키, 날짜, 키워드를 확인하세요.")  
+    
+        test_keyword_news = "반도체"
+        test_date_news = "2024-01-15"
+        print(f"\n--- 뉴스 언급량 테스트: [{test_keyword_news}] {test_date_news} ---")
+        
+        # get_naver_news_count_for_date 함수가 정의되어 있다고 가정하고 호출
+        try:
+            news_count = get_naver_news_count(test_keyword_news, test_date_news)
+            
+            if news_count > 0:
+                print(f"✅ [뉴스] 카운트 성공. {test_date_news} 언급량: {news_count}건")
+            elif news_count == 0:
+                 print(f"✅ [뉴스] 카운트 성공. {test_date_news} 언급량: 0건 (정상)")
+            else: # 에러가 발생했으나 함수 내에서 0이 아닌 다른 음수 값 등을 리턴한 경우 방지
+                print("❌ [뉴스] 카운트 실패. API 로직 또는 키 확인 필요.")
+
+        except NameError:
+            print("⚠️ [뉴스] 테스트 실패: 'get_naver_news_count_for_date' 함수가 정의되지 않았습니다.")
+        except Exception as e:
+            print(f"❌ [뉴스] 테스트 중 예외 발생: {e}")
+
     else:
         print("❌ API 키 로드 실패. .env 파일을 확인하세요.")

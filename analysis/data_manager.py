@@ -4,7 +4,6 @@ import glob
 from datetime import datetime
 import re
 
-
 def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
     '''
     네이버 API 응답 JSON을 DataFrame으로 변환 후 타임스탬프를 붙여 CSV로 저장
