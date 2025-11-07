@@ -143,28 +143,61 @@ def _draw_trend_visualization(c, start_y, image_path, width, height):
     return start_y
 
 def _draw_model_performance(c, start_y, model_metrics, height):
-    """모델 성능 섹션 그리기"""
+    """모델 성능 섹션 그리기 (전체 모델 → 최적 모델 순서로 출력)"""
     c.setFont("HYSMyeongJo-Medium", 14)
     c.drawString(2 * cm, start_y, "4. 예측 모델 성능 요약")
     start_y -= 0.7 * cm
 
     data = pd.DataFrame(model_metrics)
-    best_models = data.loc[data.groupby('키워드')['RMSE'].idxmin()]
 
+    if data.empty:
+        c.setFont("HYSMyeongJo-Medium", 10)
+        c.drawString(2.5 * cm, start_y, "- 모델 성능 데이터가 없습니다.")
+        return start_y
+
+    # -------------------------------
+    # (1) 전체 모델 성능 목록 출력
+    # -------------------------------
+    c.setFont("HYSMyeongJo-Medium", 11)
+    c.drawString(2.5 * cm, start_y, "전체 모델별 성능 요약:")
+    start_y -= 0.6 * cm
+
+    c.setFont("HYSMyeongJo-Medium", 10)
+    for _, row in data.iterrows():
+        if start_y < 2 * cm:  # 페이지 여백 보호
+            c.showPage()
+            start_y = height - 3 * cm
+            c.setFont("HYSMyeongJo-Medium", 10)
+
+        c.drawString(
+            3.0 * cm,
+            start_y,
+            f"- [{row['키워드']}] {row['모델명']} → RMSE: {row['RMSE']:.3f}, MAPE: {row['MAPE(%)']:.2f}%"
+        )
+        start_y -= 0.45 * cm
+
+    start_y -= 0.4 * cm
+
+    # -------------------------------
+    # (2) 최적 모델(=RMSE 최소)만 요약
+    # -------------------------------
+    best_models = data.loc[data.groupby('키워드')['RMSE'].idxmin()].reset_index(drop=True)
     c.setFont("HYSMyeongJo-Medium", 11)
     c.drawString(2.5 * cm, start_y, "키워드별 최적 예측 모델 (RMSE 최소 기준):")
-    start_y -= 0.5 * cm
+    start_y -= 0.6 * cm
 
-    if not best_models.empty:
-        c.setFont("HYSMyeongJo-Medium", 10)
-        for _, row in best_models.iterrows():
-            if start_y < 2 * cm:
-                c.showPage()
-                start_y = height - 3 * cm
-                c.setFont("HYSMyeongJo-Medium", 10)
-            
-            c.drawString(3.0 * cm, start_y, 
-                f"- [{row['키워드']}]: {row['모델명']} (RMSE: {row['RMSE']:.3f}, MAPE: {row['MAPE(%)']:.2f}%)")
-            start_y -= 0.5 * cm
-    
+    c.setFont("HYSMyeongJo-Medium", 10)
+    for _, row in best_models.iterrows():
+        if start_y < 2 * cm:
+            c.showPage()
+            start_y = height - 3 * cm
+            c.setFont("HYSMyeongJo-Medium", 10)
+
+        c.drawString(
+            3.0 * cm,
+            start_y,
+            f"- [{row['키워드']}] 최적 모델: {row['모델명']} (RMSE {row['RMSE']:.3f}, MAPE {row['MAPE(%)']:.2f}%)"
+        )
+        start_y -= 0.45 * cm
+
     return start_y

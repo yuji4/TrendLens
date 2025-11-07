@@ -579,4 +579,4 @@ else:
 # ⏰ 자동 업데이트 스케줄러
 # ===============================
 # 분리된 함수를 메인 앱의 import된 함수와 연결하여 호출
-setup_scheduler(get_naver_trend_data, save_data_to_csv)
+setup_scheduler()

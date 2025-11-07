@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, glob, os
-from analysis.api_manager import get_naver_trend_data
+from analysis.api_manager import get_naver_trend_data  # ✅ 클래스 → 함수로 변경
 from analysis.data_manager import save_data_to_csv
 
 # ===============================
@@ -30,9 +30,9 @@ def render_sidebar():
         st.markdown("### 🪄 데이터 관리")
         colA, colB = st.columns(2)
         with colA:
-            update_btn = st.button("🔄 업데이트", width='stretch')
+            update_btn = st.button("🔄 업데이트", use_container_width=True)
         with colB:
-            merge_btn = st.button("🗂 CSV 병합", width='stretch')
+            merge_btn = st.button("🗂 CSV 병합", use_container_width=True)
 
         st.divider()
         st.markdown("### 🕒 자동 수집 상태")
@@ -66,56 +66,38 @@ def render_sidebar():
 # ===============================
 # ⏰ 자동 업데이트 스케줄러 설정 함수
 # ===============================
-# 주의: 이 함수는 BackgroundScheduler이므로 st.session_state에 직접 접근할 수 없습니다.
-# 메인 앱에서 import된 함수들을 인자로 받아 처리합니다.
-def setup_scheduler(get_trend_data_func, save_data_func):
+def setup_scheduler():
+    """자동 업데이트 스케줄러를 설정합니다."""
     
-    def auto_update_job():
-        try:
-            keywords = ["봄", "여름", "가을", "겨울"]
-            today = date.today()
-            start = today - timedelta(days=7)
-            data = get_trend_data_func(
-                keywords=keywords,
-                start_date=str(start),
-                end_date=str(today),
-                time_unit="date",
-                gender="",
-            )
-            if data and "results" in data:
-                file_path = save_data_func(data)
-                # 세션 상태 업데이트 대신 로그 출력
-                print(f"✅ [자동 수집 완료] {file_path} @ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            else:
-                print("⚠️ [자동 수집 실패] 응답 없음")
-        except Exception as e:
-            print(f"❌ 자동 업데이트 오류: {e}")
+    try:
+        def auto_update_job():
+            try:
+                keywords = ["봄", "여름", "가을", "겨울"]
+                today = date.today()
+                start = today - timedelta(days=7)
+                
+                # ✅ 함수 직접 호출로 변경
+                data = get_naver_trend_data(
+                    keywords=keywords,
+                    start_date=str(start),
+                    end_date=str(today),
+                    time_unit="date",
+                    gender=""
+                )
+                
+                if data and "results" in data:
+                    file_path = save_data_to_csv(data)
+                    print(f"✅ [자동 수집 완료] {file_path} @ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                else:
+                    print("⚠️ [자동 수집 실패] 응답 없음")
+            except Exception as e:
+                print(f"❌ 자동 업데이트 오류: {e}")
 
-    # 스케줄러 설정 및 시작
-    scheduler = BackgroundScheduler()
-    if not scheduler.running:
-        scheduler.add_job(auto_update_job, "interval", hours=24)
-        scheduler.start()
-        atexit.register(lambda: scheduler.shutdown())
+        scheduler = BackgroundScheduler()
+        if not scheduler.running:
+            scheduler.add_job(auto_update_job, "interval", hours=24)
+            scheduler.start()
+            atexit.register(lambda: scheduler.shutdown())
 
-    # 실시간 모드 설정 (UI)
-    st.sidebar.markdown("### ⚡ 실시간 모드 설정")
-    refresh_interval = st.sidebar.slider("자동 새로고침 주기 (초)", 30, 600, 60, step=30)
-    enable_live = st.sidebar.toggle("실시간 데이터 갱신 활성화", value=False, help="네이버 트렌드 데이터를 주기적으로 갱신합니다.")
-    
-    if enable_live:
-        st.sidebar.success(f"✅ 실시간 모드 ON ({refresh_interval}초 간격)")
-        st.sidebar.caption(f"마지막 새로고침: {datetime.now().strftime('%H:%M:%S')}")
-        
-        # HTML 새로고침 로직
-        st.markdown(
-            f"""
-            <script>
-            setTimeout(function() {{
-                window.location.reload();
-            }}, {refresh_interval * 1000});
-            </script>
-            """, unsafe_allow_html=True,
-        )
-    else:
-        st.sidebar.info("⏸ 실시간 모드 비활성화 중")
+    except ValueError as e:
+        st.error(f"스케줄러 초기화 실패: {str(e)}")
