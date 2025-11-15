@@ -44,7 +44,6 @@ def get_naver_trend_data(
         start_date(str): 검색 시작 날짜. 포맷: "YYYY-MM-DD"
         end_date(str): 검색 종료 날짜. 포맷: "YYYY-MM-DD"
         time_unit(str): 데이터 단위. 'date', 'week', 'month' 중 하나 (기본값은 'date')
-        gender: 'm' (남성), 'f' (여성), 또는 '' (전체)
         ages: ['10', '20', '30', ...] 형태의 문자열 리스트
 
     반환값:
@@ -60,11 +59,6 @@ def get_naver_trend_data(
         return {}
     keywords = [k.strip() for k in keywords]
     
-    if gender not in ['', 'm', 'f']:
-        print("WARNING: gender 값이 올바르지 않습니다.")
-        gender = ''
-
-    
     # API 리퀘스트 본문 구성
     # 각 키워드를 별도의 그룹으로 처리하여 여러 트렌드를 동시 요청
     keyword_groups = [{
@@ -78,7 +72,6 @@ def get_naver_trend_data(
         "timeUnit": time_unit,
         "keywordGroups": keyword_groups,
         "device": "",
-        "gender": gender
     }
 
     headers = {

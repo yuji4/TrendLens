@@ -19,9 +19,6 @@ def render_sidebar():
         default_start = today - timedelta(days=90)
         start_date, end_date = st.date_input("조회 기간 선택", (default_start, today))
 
-        gender_display = st.radio("성별 선택", ["전체", "남성", "여성"], horizontal=True)
-        gender = {"전체": "", "남성": "m", "여성": "f"}[gender_display]
-
         st.divider()
         st.markdown("### 📊 데이터 옵션")
         align_option = st.radio("날짜 정렬 기준", ["모든 날짜", "공통 날짜"], index=0)
@@ -61,7 +58,7 @@ def render_sidebar():
 
     keywords_list = [k.strip() for k in raw_keywords.split(",") if k.strip()]
     
-    return keywords_list, time_unit, start_date, end_date, gender_display, gender, align_option, update_btn, merge_btn
+    return keywords_list, time_unit, start_date, end_date, align_option, update_btn, merge_btn
 
 # ===============================
 # ⏰ 자동 업데이트 스케줄러 설정 함수
@@ -82,7 +79,6 @@ def setup_scheduler():
                     start_date=str(start),
                     end_date=str(today),
                     time_unit="date",
-                    gender=""
                 )
                 
                 if data and "results" in data:

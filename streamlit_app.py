@@ -67,10 +67,10 @@ st.markdown(
 st.title("👀 TrendLens: 네이버 검색 트렌드 분석")
 
 
-# ===============================
+# ===============================s
 # ⚙️ 사이드바 렌더링 및 설정 값 로드
 # ===============================
-keywords, time_unit, start_date, end_date, gender_display, gender, align_option, update_btn, merge_btn = render_sidebar()
+keywords, time_unit, start_date, end_date, align_option, update_btn, merge_btn = render_sidebar()
 
 if not keywords:
     st.warning("검색어를 1개 이상 입력하세요.")
@@ -95,7 +95,6 @@ if update_btn:
                 start_date=str(start_date),
                 end_date=str(end_date),
                 time_unit=time_unit,
-                gender=gender,
             )
             if not data or "results" not in data:
                 st.error("선택한 조건에 데이터가 없습니다.")
@@ -203,6 +202,7 @@ if df is not None and not df.empty:
                     st.plotly_chart(fig_kw, use_container_width=True)
 
         st.divider()
+        st.subheader("📈 정규화 추세")
         scaled = df2.copy()
         for col in df2.columns:
             minv, maxv = scaled[col].min(), scaled[col].max()
@@ -220,11 +220,23 @@ if df is not None and not df.empty:
 
         # 기본 상관 분석
         corr = df.set_index("date").corr()
-        st.dataframe(corr.style.background_gradient(cmap="RdYlGn"), use_container_width=True)
-        fig_corr = px.imshow(corr, text_auto=True, aspect="auto", title="Correlation Heatmap", color_continuous_scale="RdBu_r")
+        fig_corr = px.imshow(
+            corr,
+            text_auto=".3f",  # 소수점 셋째 자리까지 표시
+            aspect="auto",
+            title="키워드 간 검색 패턴 유사도 (상관 히트맵)",
+            color_continuous_scale="RdBu_r"
+        )
+
+        # 레이아웃 업데이트 (PLOTLY_STYLE은 외부에서 정의되었다고 가정)
         fig_corr.update_layout(**PLOTLY_STYLE)
+    
+        # x축과 y축의 레이블을 중앙에 배치하여 가독성 개선
+        fig_corr.update_xaxes(side="top", tickangle=0)
+        fig_corr.update_yaxes(tickangle=0)
         st.plotly_chart(fig_corr, use_container_width=True)
 
+        st.divider()
         st.markdown("### 🕸️ 네트워크 상관 그래프")
         threshold_net = st.slider("상관계수 임계값", 0.0, 1.0, 0.6, 0.05)
         G = nx.Graph()
@@ -557,7 +569,6 @@ if df is not None and not df.empty:
                         start_date=start_date,
                         end_date=end_date,
                         time_unit=time_unit,
-                        gender_display=gender_display,
                         model_metrics=st.session_state.get("model_metrics", [])
                     )
                     
