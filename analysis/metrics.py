@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import streamlit as st
 from sklearn.metrics import mean_squared_error
 from datetime import datetime

@@ -5,7 +5,6 @@ import plotly.graph_objects as go
 import networkx as nx
 from datetime import datetime
 import warnings
-from analysis.ai_summary import generate_trend_summary
 
 warnings.filterwarnings("ignore")
 
@@ -18,6 +17,9 @@ from analysis.metrics import mean_absolute_percentage_error, root_mean_squared_e
 from analysis.modeling import run_prophet, run_arima, run_random_forest, tune_random_forest_bayesian, create_features, run_ccf_analysis
 from components.ui_components import render_sidebar, setup_scheduler
 from report.pdf_generator import generate_trend_report
+from analysis.ai.ai_summary import generate_trend_summary
+from analysis.ai.ai_sentiment import analyze_sentiment
+
 
 # ===============================
 # 전역 시각화 스타일
@@ -153,74 +155,65 @@ if df is not None and not df.empty:
 
     # --- 탭 2: 상세 분석 ---
     with tab2:
-        st.caption("급등·급락 변화율을 분석합니다.")
-        st.subheader("📈 급상승·급하락 분석")
+        st.caption("검색량 급등 날짜를 자동 감지하고, 관련 뉴스 + AI 분석을 수행합니다.")
+        st.subheader("📈 급등 이벤트 분석")
 
-        df2 = df.copy().set_index("date")
-        pct = df2.pct_change().reset_index()
-        pct.columns = ["date"] + [f"{c}_증감률(%)" for c in df2.columns]
-        
-        for c in pct.columns[1:]:
-            pct[c] = (pct[c] * 100).round(2)
+        from analysis.trend_events import detect_surge_events
+        from analysis.news_fetcher import fetch_news_articles
+        from analysis.ai.ai_cause_analysis import analyze_news_articles
 
-        threshold = st.slider("급변 기준(%)", 10, 200, 50, 10)
+        # 1) 급등 이벤트 감지
+        events = detect_surge_events(df, threshold_percent=50)
 
-        alerts = []
-        for col in pct.columns[1:]:
-            spikes = pct.loc[pct[col].abs() >= threshold, ["date", col]]
-            for _, r in spikes.iterrows():
-                alerts.append({
-                    "키워드": col.replace("_증감률(%)", ""),
-                    "날짜": r["date"].date(),
-                    "유형": "급등" if r[col] > 0 else "급락",
-                    "변동률(%)": round(r[col], 1)
-                })
-
-        alert_df = pd.DataFrame(alerts)
-
-        if alert_df.empty:
-            st.info("✅ 급변 변화 없음.")
+        if events.empty:
+            st.info("📉 급등 이벤트가 감지되지 않았습니다.")
         else:
-            selected_kw = st.selectbox("🔍 키워드 선택", sorted(df2.columns))
-            kw_alerts = alert_df[alert_df["키워드"] == selected_kw]
-            if kw_alerts.empty:
-                st.info(f"{selected_kw} 키워드에서 급변 없음.")
-            else:
-                st.dataframe(kw_alerts, use_container_width=True)
-                
-                fig_kw = px.line(df2.reset_index(), x="date", y=selected_kw, title=f"{selected_kw} 급등·급락 구간")
-                for _, r in kw_alerts.iterrows():
-                    color = "red" if r["유형"] == "급등" else "blue"
-                    fig_kw.add_vline(x=r["날짜"], line_dash="dot", line_color=color)
-                
-                fig_kw.update_layout(**PLOTLY_STYLE)
-                st.plotly_chart(fig_kw, use_container_width=True)
+            st.success(f"총 {len(events)}개의 급등 이벤트 감지됨")
+            st.dataframe(events, use_container_width=True)
 
-        st.divider()
-        st.subheader("🤖 AI 자동 요약 리포트")
-
-        try:
-             # 1) 해당 키워드의 검색량 데이터 준비
-            df_kw = df2.reset_index()[["date", selected_kw]].rename(columns={selected_kw: "ratio"})
-
-            # 2) 급등 이벤트 (kw_alerts) 전달
-            spike_events = kw_alerts.to_dict(orient="records") if not kw_alerts.empty else []
-
-            # 3) 예측 정보(선택)
-            forecast_info = None  # 추후 4번 기능에서 연결할 수 있음
-
-            # 4) 요약 생성
-            ai_summary = generate_trend_summary(
-                keyword=selected_kw,
-                df=df_kw,
-                spike_events=spike_events,
-                forecast_info=forecast_info
+            # 선택박스 만들기
+            event_key_list = events.apply(
+                lambda r: f"{r['date']} | {r['keyword']} | +{r['change']}%",
+                axis=1
             )
+            selected = st.selectbox("분석할 이벤트 선택", event_key_list)
 
-            st.success(ai_summary)
+            # 선택된 데이터 찾기
+            idx = event_key_list.tolist().index(selected)
+            ev = events.iloc[idx]
+            keyword = ev["keyword"]
+            event_date = ev["date"]
 
-        except Exception as e:
-            st.error(f"AI 요약 생성 중 오류 발생: {e}")
+            st.info(f"🔍 선택한 이벤트: **{keyword}** / 날짜: **{event_date.date()}**")
+
+            if st.button("📡 뉴스 수집 + AI 원인 분석 실행"):
+                # 2) 뉴스 크롤링
+                with st.spinner("뉴스 수집 중..."):
+                    start_date = str(event_date - pd.Timedelta(days=2))
+                    end_date = str(event_date + pd.Timedelta(days=2))
+
+                    articles = fetch_news_articles(keyword, start_date, end_date)
+
+                if len(articles) == 0:
+                    st.warning("관련 뉴스가 없습니다.")
+                else:
+                    st.success(f"{len(articles)}개 뉴스 수집됨")
+
+                    # 3) AI 분석
+                    with st.spinner("AI가 급등 원인을 분석하는 중..."):
+                        cause_text = analyze_news_articles(keyword, articles)
+
+                    st.markdown("### 🔥 급등 원인 분석 결과")
+                    st.write(cause_text)
+
+                    st.markdown("### 📰 참조된 뉴스")
+                    for a in articles:
+                        st.markdown(f"""
+                        **{a['title']}**  
+                        {a['desc']}  
+                        🔗 [기사 보기]({a['link']})
+                        """)
+                        st.divider()
 
     # --- 탭 3: 상관 분석 ---
     with tab3:

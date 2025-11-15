@@ -6,7 +6,6 @@ from prophet import Prophet
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_score
 from statsmodels.tsa.arima.model import ARIMA
-from analysis.metrics import root_mean_squared_error 
 from statsmodels.tsa.stattools import ccf
 
 # ===============================
