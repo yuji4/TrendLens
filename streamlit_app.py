@@ -154,17 +154,18 @@ if df is not None and not df.empty:
 
     # --- 탭 2: 상세 분석 ---
     with tab2:
-        st.caption("급등·급락 변화율과 정규화 데이터를 분석합니다.")
+        st.caption("급등·급락 변화율을 분석합니다.")
         st.subheader("📈 급상승·급하락 분석")
 
-        view_mode = st.radio("분석 보기 모드", ["전체 요약 보기", "키워드별 상세 보기"], horizontal=True)
         df2 = df.copy().set_index("date")
         pct = df2.pct_change().reset_index()
         pct.columns = ["date"] + [f"{c}_증감률(%)" for c in df2.columns]
+        
         for c in pct.columns[1:]:
             pct[c] = (pct[c] * 100).round(2)
 
         threshold = st.slider("급변 기준(%)", 10, 200, 50, 10)
+
         alerts = []
         for col in pct.columns[1:]:
             spikes = pct.loc[pct[col].abs() >= threshold, ["date", col]]
@@ -181,25 +182,20 @@ if df is not None and not df.empty:
         if alert_df.empty:
             st.info("✅ 급변 변화 없음.")
         else:
-            if view_mode == "전체 요약 보기":
-                st.warning(f"⚠️ 감지된 급변 이벤트 {len(alert_df)}건")
-                st.dataframe(alert_df, use_container_width=True)
-                summary = alert_df.groupby(["키워드", "유형"]).size().unstack(fill_value=0)
-                st.markdown("#### 📊 키워드별 급등/급락 요약")
-                st.dataframe(summary, use_container_width=True)
+            selected_kw = st.selectbox("🔍 키워드 선택", sorted(df2.columns))
+            kw_alerts = alert_df[alert_df["키워드"] == selected_kw]
+            if kw_alerts.empty:
+                st.info(f"{selected_kw} 키워드에서 급변 없음.")
             else:
-                selected_kw = st.selectbox("🔍 키워드 선택", sorted(df2.columns))
-                kw_alerts = alert_df[alert_df["키워드"] == selected_kw]
-                if kw_alerts.empty:
-                    st.info(f"{selected_kw} 키워드에서 급변 없음.")
-                else:
-                    st.dataframe(kw_alerts, use_container_width=True)
-                    fig_kw = px.line(df2.reset_index(), x="date", y=selected_kw, title=f"{selected_kw} 급등·급락 구간")
-                    for _, r in kw_alerts.iterrows():
-                        color = "red" if r["유형"] == "급등" else "blue"
-                        fig_kw.add_vline(x=r["날짜"], line_dash="dot", line_color=color)
-                    fig_kw.update_layout(**PLOTLY_STYLE)
-                    st.plotly_chart(fig_kw, use_container_width=True)
+                st.dataframe(kw_alerts, use_container_width=True)
+                
+                fig_kw = px.line(df2.reset_index(), x="date", y=selected_kw, title=f"{selected_kw} 급등·급락 구간")
+                for _, r in kw_alerts.iterrows():
+                    color = "red" if r["유형"] == "급등" else "blue"
+                    fig_kw.add_vline(x=r["날짜"], line_dash="dot", line_color=color)
+                
+                fig_kw.update_layout(**PLOTLY_STYLE)
+                st.plotly_chart(fig_kw, use_container_width=True)
 
 
     # --- 탭 3: 상관 분석 ---
