@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import networkx as nx
 from datetime import datetime
 import warnings
 
@@ -296,5 +295,4 @@ else:
 # ===============================
 # ⏰ 자동 업데이트 스케줄러
 # ===============================
-# 분리된 함수를 메인 앱의 import된 함수와 연결하여 호출
 setup_scheduler()

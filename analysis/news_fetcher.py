@@ -1,5 +1,4 @@
 import requests
-from datetime import datetime
 from analysis.api_manager import get_naver_news_api_keys
 
 def _clean_html(text: str) -> str:
