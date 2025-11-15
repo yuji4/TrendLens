@@ -201,17 +201,6 @@ if df is not None and not df.empty:
                     fig_kw.update_layout(**PLOTLY_STYLE)
                     st.plotly_chart(fig_kw, use_container_width=True)
 
-        st.divider()
-        st.subheader("📈 정규화 추세")
-        scaled = df2.copy()
-        for col in df2.columns:
-            minv, maxv = scaled[col].min(), scaled[col].max()
-            scaled[col] = (scaled[col] - minv) / (maxv - minv) if maxv != minv else 0
-        scaled = scaled.reset_index()
-        df_scaled_long = scaled.melt(id_vars="date", var_name="metric", value_name="value")
-        fig_scaled = px.line(df_scaled_long, x="date", y="value", color="metric", title="정규화(0~1) 추세")
-        fig_scaled.update_layout(**PLOTLY_STYLE)
-        st.plotly_chart(fig_scaled, use_container_width=True)
 
     # --- 탭 3: 상관 분석 ---
     with tab3:
