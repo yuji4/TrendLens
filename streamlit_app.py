@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import numpy as np
 import networkx as nx
-from datetime import date, timedelta, datetime
-import atexit, os, glob, warnings
-from io import BytesIO 
+from datetime import datetime
+import warnings
+from analysis.ai_summary import generate_trend_summary
 
 warnings.filterwarnings("ignore")
 
@@ -197,6 +196,31 @@ if df is not None and not df.empty:
                 fig_kw.update_layout(**PLOTLY_STYLE)
                 st.plotly_chart(fig_kw, use_container_width=True)
 
+        st.divider()
+        st.subheader("🤖 AI 자동 요약 리포트")
+
+        try:
+             # 1) 해당 키워드의 검색량 데이터 준비
+            df_kw = df2.reset_index()[["date", selected_kw]].rename(columns={selected_kw: "ratio"})
+
+            # 2) 급등 이벤트 (kw_alerts) 전달
+            spike_events = kw_alerts.to_dict(orient="records") if not kw_alerts.empty else []
+
+            # 3) 예측 정보(선택)
+            forecast_info = None  # 추후 4번 기능에서 연결할 수 있음
+
+            # 4) 요약 생성
+            ai_summary = generate_trend_summary(
+                keyword=selected_kw,
+                df=df_kw,
+                spike_events=spike_events,
+                forecast_info=forecast_info
+            )
+
+            st.success(ai_summary)
+
+        except Exception as e:
+            st.error(f"AI 요약 생성 중 오류 발생: {e}")
 
     # --- 탭 3: 상관 분석 ---
     with tab3:

@@ -12,3 +12,4 @@ statsmodels
 optuna
 reportlab
 kaleido
+openai>=1.52.0
