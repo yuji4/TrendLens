@@ -27,9 +27,9 @@ def render_sidebar():
         st.markdown("### 🪄 데이터 관리")
         colA, colB = st.columns(2)
         with colA:
-            update_btn = st.button("🔄 업데이트", use_container_width=True)
+            update_btn = st.button("🔄 업데이트", width='stretch')
         with colB:
-            merge_btn = st.button("🗂 CSV 병합", use_container_width=True)
+            merge_btn = st.button("🗂 CSV 병합", width='stretch')
 
         st.divider()
         st.markdown("### 🕒 자동 수집 상태")

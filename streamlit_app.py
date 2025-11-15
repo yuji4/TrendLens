@@ -152,8 +152,8 @@ if df is not None and not df.empty:
         df_long = df_vis.melt(id_vars="date", var_name="keyword", value_name="ratio")
         fig = px.line(df_long, x="date", y="ratio", color="keyword", markers=True)
         fig.update_layout(**PLOTLY_STYLE)
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(df_vis, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
+        st.dataframe(df_vis, width='stretch')
 
     # --- 탭 2: 상세 분석 ---
     with tab2:
@@ -167,7 +167,7 @@ if df is not None and not df.empty:
             st.info("📉 급등 이벤트가 감지되지 않았습니다.")
         else:
             st.success(f"총 {len(events)}개의 급등 이벤트 감지됨")
-            st.dataframe(events, use_container_width=True)
+            st.dataframe(events, width='stretch')
 
             # 선택박스 만들기
             event_key_list = events.apply(

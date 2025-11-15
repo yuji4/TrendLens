@@ -25,7 +25,7 @@ def render_metrics_comparison(df_metrics, selected_kw, plot_style):
     )
 
     df_filtered = df_metrics[df_metrics["키워드"] == selected_comparison_kw]
-    st.dataframe(df_filtered, use_container_width=True)
+    st.dataframe(df_filtered, width='stretch')
 
     if df_filtered.empty:
         st.info(f"키워드 '{selected_comparison_kw}'에 대한 저장된 데이터가 없습니다.")
@@ -50,7 +50,7 @@ def render_metrics_comparison(df_metrics, selected_kw, plot_style):
         color_discrete_sequence=px.colors.qualitative.Set2,
     )
     fig_rmse.update_layout(**plot_style)
-    st.plotly_chart(fig_rmse, use_container_width=True)
+    st.plotly_chart(fig_rmse, width='stretch')
 
     # MAPE Bar Chart
     st.markdown("### MAPE 비교")
@@ -64,4 +64,4 @@ def render_metrics_comparison(df_metrics, selected_kw, plot_style):
         color_discrete_sequence=px.colors.qualitative.Pastel,
     )
     fig_mape.update_layout(**plot_style)
-    st.plotly_chart(fig_mape, use_container_width=True)
+    st.plotly_chart(fig_mape, width='stretch')

@@ -26,7 +26,7 @@ def render_correlation_ui(df, plot_style):
     fig_corr.update_xaxes(side="top", tickangle=0)
     fig_corr.update_yaxes(tickangle=0)
 
-    st.plotly_chart(fig_corr, use_container_width=True)
+    st.plotly_chart(fig_corr, width='stretch')
 
     # ----------------------
     # 📌 네트워크 그래프
@@ -80,7 +80,7 @@ def render_correlation_ui(df, plot_style):
             title=f"키워드 네트워크 (|r| ≥ {threshold_net})",
             **plot_style,
         )
-        st.plotly_chart(fig_net, use_container_width=True)
+        st.plotly_chart(fig_net, width='stretch')
 
     # ----------------------
     # 📌 교차 상관(Cross-Correlation)
@@ -156,7 +156,7 @@ def render_correlation_ui(df, plot_style):
             **plot_style,
         )
 
-        st.plotly_chart(fig_ccf, use_container_width=True)
+        st.plotly_chart(fig_ccf, width='stretch')
 
         st.markdown("#### 🔍 분석 결과")
         if abs(ccf_results["max_correlation"]) > ccf_results["conf_level"]:

@@ -109,11 +109,11 @@ def render_prophet_seasonality(forecast):
     # 컬럼 3개 배치
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.plotly_chart(fig_trend, use_container_width=True)
+        st.plotly_chart(fig_trend, width='stretch')
     with col2:
-        st.plotly_chart(fig_yearly, use_container_width=True)
+        st.plotly_chart(fig_yearly, width='stretch')
     with col3:
-        st.plotly_chart(fig_weekly, use_container_width=True)
+        st.plotly_chart(fig_weekly, width='stretch')
 
 
 # ---------------------------------------------------------
@@ -147,7 +147,7 @@ def render_prophet_ui(df_forecast, keyword, days_ahead):
                 title=f"{keyword} {days_ahead}일 예측 (Prophet)",
                 **PLOTLY_STYLE
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             # 성능 metrics
             mape = mean_absolute_percentage_error(y_true, y_pred)
@@ -194,7 +194,7 @@ def render_arima_ui(df_forecast, keyword, days_ahead):
                 title=f"{keyword} {days_ahead}일 예측 (ARIMA)",
                 **PLOTLY_STYLE
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             mape = mean_absolute_percentage_error(y_true, y_pred_past)
             rmse = root_mean_squared_error(y_true, y_pred_past)
@@ -257,7 +257,7 @@ def render_random_forest_ui(df_forecast, keyword, days_ahead):
                 title=f"{keyword} {days_ahead}일 예측 (Random Forest)",
                 **PLOTLY_STYLE
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             mape = mean_absolute_percentage_error(y_true, y_pred_past)
             rmse = root_mean_squared_error(y_true, y_pred_past)
@@ -286,4 +286,4 @@ def render_random_forest_ui(df_forecast, keyword, days_ahead):
                 color_continuous_scale=px.colors.sequential.Teal
             )
             fig_imp.update_layout(**PLOTLY_STYLE)
-            st.plotly_chart(fig_imp, use_container_width=True)
+            st.plotly_chart(fig_imp, width='stretch')
