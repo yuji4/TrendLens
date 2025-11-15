@@ -155,7 +155,7 @@ if df is not None and not df.empty:
 
     # --- 탭 2: 상세 분석 ---
     with tab2:
-        st.caption("검색량 급등 날짜를 자동 감지하고, 관련 뉴스 + AI 분석을 수행합니다.")
+        st.caption("검색량 급등 이벤트를 자동 감지하고, 키워드 관련 뉴스 기반으로 AI가 원인을 분석합니다.")
         st.subheader("📈 급등 이벤트 분석")
 
         from analysis.trend_events import detect_surge_events
@@ -173,7 +173,7 @@ if df is not None and not df.empty:
 
             # 선택박스 만들기
             event_key_list = events.apply(
-                lambda r: f"{r['date']} | {r['keyword']} | +{r['change']}%",
+                lambda r: f"{r['keyword']} | +{r['change']}%",
                 axis=1
             )
             selected = st.selectbox("분석할 이벤트 선택", event_key_list)
@@ -182,20 +182,16 @@ if df is not None and not df.empty:
             idx = event_key_list.tolist().index(selected)
             ev = events.iloc[idx]
             keyword = ev["keyword"]
-            event_date = ev["date"]
+            change = ev["change"]
 
-            st.info(f"🔍 선택한 이벤트: **{keyword}** / 날짜: **{event_date.date()}**")
+            st.info(f"🔍 선택한 이벤트: **{keyword}** (증가율 +{change}%)")
 
             if st.button("📡 뉴스 수집 + AI 원인 분석 실행"):
-                # 2) 뉴스 크롤링
                 with st.spinner("뉴스 수집 중..."):
-                    start_date = str(event_date - pd.Timedelta(days=2))
-                    end_date = str(event_date + pd.Timedelta(days=2))
-
-                    articles = fetch_news_articles(keyword, start_date, end_date)
+                    articles = fetch_news_articles(keyword,  max_articles=40)
 
                 if len(articles) == 0:
-                    st.warning("관련 뉴스가 없습니다.")
+                    st.warning("관련 뉴스가 부족해 AI 분석을 수행할 수 없습니다.")
                 else:
                     st.success(f"{len(articles)}개 뉴스 수집됨")
 
