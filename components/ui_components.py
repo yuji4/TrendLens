@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, glob, os
-from analysis.api_manager import get_naver_trend_data  # ✅ 클래스 → 함수로 변경
+from analysis.api_manager import get_naver_trend_data  
 from analysis.data_manager import save_data_to_csv
 
 # ===============================
@@ -82,7 +82,7 @@ def setup_scheduler():
                 )
                 
                 if data and "results" in data:
-                    file_path = save_data_to_csv(data)
+                    file_path = save_data_to_csv(data, auto=True)
                     print(f"✅ [자동 수집 완료] {file_path} @ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 else:
                     print("⚠️ [자동 수집 실패] 응답 없음")

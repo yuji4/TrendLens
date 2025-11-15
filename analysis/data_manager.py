@@ -4,7 +4,7 @@ import glob
 from datetime import datetime
 import re
 
-def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
+def save_data_to_csv(data: dict, folder_path: str = 'data', auto: bool= False) -> str:
     '''
     네이버 API 응답 JSON을 DataFrame으로 변환 후 타임스탬프를 붙여 CSV로 저장
     DataFrame은 날짜(index)별로 키워드별 검색 비율을 컬럼으로 갖는 피벗 형식
@@ -17,7 +17,8 @@ def save_data_to_csv(data: dict, folder_path: str = 'data') -> str:
 
     # 타임스탬프 기반 파일명 생성 및 저장
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"trend_data_{timestamp}.csv"
+    prefix = "auto_trend" if auto else "trend_data"
+    file_name = f"{prefix}_{timestamp}.csv"
     file_path = os.path.join(folder_path, file_name)
 
     # 유효성 검사
