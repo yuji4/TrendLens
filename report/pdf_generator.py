@@ -16,7 +16,6 @@ def generate_trend_report(
     start_date, 
     end_date, 
     time_unit, 
-    gender_display,
     model_metrics
 ):
     """트렌드 분석 PDF 리포트 생성"""
@@ -62,7 +61,7 @@ def generate_trend_report(
         start_y = height - 4.5 * cm
 
         # 1. 분석 개요
-        _draw_analysis_overview(c, start_y, keywords, start_date, end_date, time_unit, gender_display)
+        _draw_analysis_overview(c, start_y, keywords, start_date, end_date, time_unit)
         start_y -= 3.2 * cm
 
         # 2. 데이터 요약
@@ -93,7 +92,7 @@ def generate_trend_report(
         if os.path.exists(image_path):
             os.remove(image_path)
 
-def _draw_analysis_overview(c, start_y, keywords, start_date, end_date, time_unit, gender_display):
+def _draw_analysis_overview(c, start_y, keywords, start_date, end_date, time_unit):
     """분석 개요 섹션 그리기"""
     c.setFont("HYSMyeongJo-Medium", 14)
     c.drawString(2 * cm, start_y, "1. 분석 개요")
@@ -104,7 +103,7 @@ def _draw_analysis_overview(c, start_y, keywords, start_date, end_date, time_uni
     start_y -= 0.5 * cm
     c.drawString(2.5 * cm, start_y, f"- 조회 기간: {start_date} ~ {end_date} ({time_unit} 단위)")
     start_y -= 0.5 * cm
-    c.drawString(2.5 * cm, start_y, f"- 조회 성별: {gender_display}")
+
     
     return start_y
 

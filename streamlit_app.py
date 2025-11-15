@@ -13,12 +13,13 @@ warnings.filterwarnings("ignore")
 # ===============================
 from analysis.api_manager import get_naver_trend_data
 from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
-from analysis.metrics import mean_absolute_percentage_error, root_mean_squared_error, save_model_metrics
-from analysis.modeling import run_prophet, run_arima, run_random_forest, tune_random_forest_bayesian, create_features, run_ccf_analysis
+from analysis.modeling import run_ccf_analysis
 from components.ui_components import render_sidebar, setup_scheduler
 from report.pdf_generator import generate_trend_report
-from analysis.ai.ai_summary import generate_trend_summary
-from analysis.ai.ai_sentiment import analyze_sentiment
+from analysis.trend_events import detect_surge_events
+from analysis.news_fetcher import fetch_news_articles
+from analysis.ai.ai_cause_analysis import analyze_news_articles
+from components.model_ui import render_prophet_ui, render_arima_ui, render_random_forest_ui, render_model_info
 
 
 # ===============================
@@ -157,10 +158,6 @@ if df is not None and not df.empty:
     with tab2:
         st.caption("검색량 급등 이벤트를 자동 감지하고, 키워드 관련 뉴스 기반으로 AI가 원인을 분석합니다.")
         st.subheader("📈 급등 이벤트 분석")
-
-        from analysis.trend_events import detect_surge_events
-        from analysis.news_fetcher import fetch_news_articles
-        from analysis.ai.ai_cause_analysis import analyze_news_articles
 
         # 1) 급등 이벤트 감지
         events = detect_surge_events(df, threshold_percent=50)
@@ -331,183 +328,30 @@ if df is not None and not df.empty:
     with tab4:
         st.caption("Prophet / ARIMA / Random Forest 기반 미래 검색 트렌드 예측 및 비교 분석을 제공합니다.")
         st.subheader("🔮 트렌드 예측")
+
         model_type = st.radio("모델 선택", ["Prophet", "ARIMA", "Random Forest"], horizontal=True)
-        selected_kw = st.selectbox("예측할 키워드", [c for c in df.columns if c != "date"])
+        render_model_info()
+
+        selected_kw = st.selectbox(
+            "예측할 키워드", [c for c in df.columns if c != "date"]
+        )
         days_ahead = st.slider("예측 기간 (일)", 7, 180, 30, 7)
-        df_forecast = df[["date", selected_kw]].rename(columns={"date": "ds", selected_kw: "y"})
 
-        if model_type == "Random Forest":
-            st.markdown("#### 🌲 Random Forest 하이퍼파라미터 튜닝 설정")
-            tune = st.checkbox("Bayesian Optimizatin 기반 하이퍼파라미터 튜닝 실행", value=False)
+        # Prophet/ARIMA/RF 공통 데이터 포맷(ds, y)
+        df_forecast = df[["date", selected_kw]].rename(
+            columns={"date": "ds", selected_kw: "y"}
+        )
 
-            if tune: 
-                n_trials = st.slider("탐색 시도 횟수", 10, 50, 25, 5)
-            else:
-                n_trials = None
+        # 각 모델의 UI 처리 함수 호출
+        if model_type == "Prophet":
+            render_prophet_ui(df_forecast, selected_kw, days_ahead)
 
-        if st.button("🚀 예측 실행", type="primary"):
-            with st.spinner("예측 중..."):
-                try:
-                    if model_type == "Prophet":
-                        model, forecast = run_prophet(df_forecast, days_ahead)
-                    
-                        y_true = df_forecast['y'].values
-                        y_pred = forecast['yhat'].head(len(y_true)).values
-                    
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat"], mode="lines", name="예측값",
-                                                 line=dict(color="royalblue", width=2)))
-                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_upper"], line=dict(width=0),
-                                                 fill=None, showlegend=False))
-                        fig.add_trace(go.Scatter(x=forecast["ds"], y=forecast["yhat_lower"],
-                                                 fill="tonexty", fillcolor="rgba(135,206,250,0.2)", line=dict(width=0),
-                                                 name="신뢰구간"))
-                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
-                                                 name="실제값", line=dict(color="black", width=3)))
-                        fig.update_layout(title=f"{selected_kw} {days_ahead}일 예측 (Prophet)", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True)
+        elif model_type == "ARIMA":
+            render_arima_ui(df_forecast, selected_kw, days_ahead)
 
-                        mape = mean_absolute_percentage_error(y_true, y_pred)
-                        rmse = root_mean_squared_error(y_true, y_pred)
-                        save_model_metrics("Prophet", selected_kw, mape, rmse)
-
-                        st.markdown("#### 🌟 모델 성능 지표")
-                        col_metrics = st.columns(2)
-                        col_metrics[0].metric(label="MAPE (Mean Absolute Percentage Error)", value=f"{mape:.2f}%")
-                        col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
-                        st.caption("MAPE와 RMSE는 예측 기간을 제외한 과거 데이터에 대한 모델의 적합도를 나타냅니다.")
-                    
-                        # 트렌드 분해 시각화
-                        st.divider()
-                        st.subheader("✨ 트렌드 분해 분석 (Prophet)")
-                        st.caption("검색량 데이터에서 장기 추세, 연간 계절성, 주간 계절성을 분리하여 보여줍니다.")
-                        
-                        fig_trend = px.line(forecast, x="ds", y="trend", title="장기 추세 (Trend)", color_discrete_sequence=['#4CAF50'])
-                        fig_trend.update_layout(plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
-                        fig_trend.update_yaxes(title_text="영향도")
-                        
-                        df_yearly_pattern = forecast[['ds', 'yearly']].tail(365).copy() 
-                        fig_yearly = go.Figure()
-                        fig_yearly.add_trace(go.Scatter(x=df_yearly_pattern["ds"], y=df_yearly_pattern["yearly"], mode="lines", name="연간 계절성", line=dict(color="#2196F3")))
-                        fig_yearly.update_layout(title="연간 계절성 (Yearly Seasonality)", plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
-                        fig_yearly.update_xaxes(title_text="날짜", tickformat="%m-%d") 
-                        fig_yearly.update_yaxes(title_text="영향도")
-                        
-                        df_weekly = forecast[["ds", "weekly"]].tail(7).copy()
-                        day_names_kr = ['월', '화', '수', '목', '금', '토', '일']
-                        df_weekly['day_name_kr'] = df_weekly['ds'].dt.day_name(locale='en').map({
-                            'Monday': '월', 'Tuesday': '화', 'Wednesday': '수', 'Thursday': '목', 
-                            'Friday': '금', 'Saturday': '토', 'Sunday': '일'
-                        })
-                        df_weekly['day_name_kr'] = pd.Categorical(df_weekly['day_name_kr'], categories=day_names_kr, ordered=True)
-                        df_weekly = df_weekly.sort_values('day_name_kr')
-
-                        fig_weekly = px.bar(df_weekly, x="day_name_kr", y="weekly", title="주간 계절성 (Weekly Seasonality)",
-                                                color_discrete_sequence=['#FFC107'])
-                        fig_weekly.update_layout(plot_bgcolor="white", paper_bgcolor="#F5F5F5", font=dict(size=12), margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
-                        fig_weekly.update_xaxes(title_text="요일", categoryorder='array', categoryarray=day_names_kr)
-                        fig_weekly.update_yaxes(title_text="영향도")
-                        
-                        cols_comp = st.columns(3)
-                        with cols_comp[0]:
-                            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
-                        with cols_comp[1]:
-                            st.plotly_chart(fig_yearly, use_container_width=True, config={'displayModeBar': False})
-                        with cols_comp[2]:
-                            st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False})
-
-                    elif model_type == "ARIMA":
-                        with st.spinner("ARIMA 모델 예측 중..."):
-                            try:
-                                # 모든 ARIMA 관련 로직을 modeling.py의 함수로 대체
-                                forecast_df, y_true, y_pred_past = run_arima(df_forecast, days_ahead)
-                                
-                                fig = go.Figure()
-                                fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], 
-                                                       mode="lines+markers",
-                                                       name="실제값", 
-                                                       line=dict(color="black", width=3)))
-                                fig.add_trace(go.Scatter(x=forecast_df["날짜"], 
-                                                       y=forecast_df["예측값"], 
-                                                       mode="lines",
-                                                       name="예측값", 
-                                                       line=dict(color="royalblue", width=2.5, dash="dot")))
-                                fig.update_layout(title=f"ARIMA 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
-                                st.plotly_chart(fig, use_container_width=True)
-
-                                mape = mean_absolute_percentage_error(y_true, y_pred_past)
-                                rmse = root_mean_squared_error(y_true, y_pred_past)
-                                save_model_metrics("ARIMA", selected_kw, mape, rmse)
-                                
-                                # 성능 지표 표시
-                                st.markdown("#### 🌟 모델 성능 지표")
-                                col_metrics = st.columns(2)
-                                col_metrics[0].metric(label="MAPE", value=f"{mape:.2f}%")
-                                col_metrics[1].metric(label="RMSE", value=f"{rmse:.2f}")
-                                st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
-                                
-                            except Exception as e:
-                                st.error(f"❌ ARIMA 예측 오류: {str(e)}")
-
-                    elif model_type == "Random Forest":
-                        tuned_model = None
-                        st.subheader("🌲 Random Forest 예측 및 Bayesian 튜닝")
-                        
-                        if tune:
-                            with st.spinner("Optuna Bayesian Optimization 튜닝 중... ⏳"):
-                                train_df_rf = create_features(df_forecast.copy())
-                                features_x_rf = [c for c in train_df_rf.columns if c not in ['ds', 'y']]
-                                X_train_rf, y_train_rf = train_df_rf[features_x_rf], train_df_rf['y']
-                                
-                                best_model, best_params, best_score = tune_random_forest_bayesian(X_train_rf, y_train_rf, n_trials=n_trials)
-                            
-                            st.success("🎯 Bayesian Optimization 완료!")
-                            st.json(best_params)
-                            st.caption(f"최적 MSE: {best_score:.4f}")
-                            tuned_model = best_model
-
-                        forecast_df, y_true, y_pred_past, feature_importances, features = run_random_forest(df_forecast, days_ahead, tuned_model=tuned_model)
-
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(x=df_forecast["ds"], y=df_forecast["y"], mode="lines+markers",
-                                                 name="실제값", line=dict(color="black", width=3)))
-                        fig.add_trace(go.Scatter(x=forecast_df["날짜"], y=forecast_df["예측값"], mode="lines",
-                                                 name="예측값", line=dict(color="#FF5722", width=2.5, dash="dot")))
-                        fig.update_layout(title=f"Random Forest 기반 {selected_kw} {days_ahead}일 예측", **PLOTLY_STYLE)
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        mape = mean_absolute_percentage_error(y_true, y_pred_past) 
-                        rmse = root_mean_squared_error(y_true, y_pred_past)
-                        save_model_metrics("Random Forest", selected_kw, mape, rmse)
+        elif model_type == "Random Forest":
+            render_random_forest_ui(df_forecast, selected_kw, days_ahead)
         
-                        st.markdown("#### 🌟 모델 성능 지표")
-                        col_metrics = st.columns(2)
-                        col_metrics[0].metric(label="MAPE (Mean Absolute Percentage Error)", value=f"{mape:.2f}%")
-                        col_metrics[1].metric(label="RMSE (Root Mean Squared Error)", value=f"{rmse:.2f}")
-                        st.caption("MAPE와 RMSE는 훈련 데이터에 대한 모델의 적합도를 나타냅니다.")
-
-                        st.divider()
-                        st.subheader("💡 피처 중요도 분석 (Random Forest)")
-                        st.caption("모델 예측에 가장 큰 영향을 미친 시간 피처의 기여도를 보여줍니다.")
-                        
-                        importance_df = pd.DataFrame({
-                            'Feature': features,
-                            'Importance': feature_importances
-                        }).sort_values(by='Importance', ascending=True)
-                        
-                        fig_import = px.bar(
-                            importance_df, x='Importance', y='Feature', orientation='h',
-                            title='검색량 예측에 기여한 시간 요인', color='Importance',
-                            color_continuous_scale=px.colors.sequential.Teal
-                        )
-                        fig_import.update_layout(
-                            plot_bgcolor='white', paper_bgcolor='#F5F5F5',
-                            margin=dict(l=20, r=20, t=30, b=20), font=dict(size=12)
-                        )
-                        st.plotly_chart(fig_import, use_container_width=True, config={'displayModeBar': False})
-                        
-                except Exception as e:
-                    st.error(f"❌ 예측 오류: {e}")
 
     # --- 탭 5: 모델 성능 비교 ---
     with tab5:
