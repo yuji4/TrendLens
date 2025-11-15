@@ -19,7 +19,9 @@ from report.pdf_generator import generate_trend_report
 from analysis.trend_events import detect_surge_events
 from analysis.news_fetcher import fetch_news_articles
 from analysis.ai.ai_cause_analysis import analyze_news_articles
-from components.model_ui import render_prophet_ui, render_arima_ui, render_random_forest_ui, render_model_info
+from ui.model_ui import render_prophet_ui, render_arima_ui, render_random_forest_ui, render_model_info
+from ui.metrics_ui import render_metrics_comparison
+from ui.correlation_ui import render_correlation_ui
 
 
 # ===============================
@@ -213,116 +215,7 @@ if df is not None and not df.empty:
         st.caption("키워드 간 검색 패턴 유사도를 상관계수 및 네트워크로 분석합니다.")
         st.subheader("🔗 상관관계 분석")
 
-        # 기본 상관 분석
-        corr = df.set_index("date").corr()
-        fig_corr = px.imshow(
-            corr,
-            text_auto=".3f",  # 소수점 셋째 자리까지 표시
-            aspect="auto",
-            title="키워드 간 검색 패턴 유사도 (상관 히트맵)",
-            color_continuous_scale="RdBu_r"
-        )
-
-        # 레이아웃 업데이트 (PLOTLY_STYLE은 외부에서 정의되었다고 가정)
-        fig_corr.update_layout(**PLOTLY_STYLE)
-    
-        # x축과 y축의 레이블을 중앙에 배치하여 가독성 개선
-        fig_corr.update_xaxes(side="top", tickangle=0)
-        fig_corr.update_yaxes(tickangle=0)
-        st.plotly_chart(fig_corr, use_container_width=True)
-
-        st.divider()
-        st.markdown("### 🕸️ 네트워크 상관 그래프")
-        threshold_net = st.slider("상관계수 임계값", 0.0, 1.0, 0.6, 0.05)
-        G = nx.Graph()
-        for i in corr.columns:
-            for j in corr.columns:
-                if i != j and abs(corr.loc[i, j]) >= threshold_net:
-                    G.add_edge(i, j, weight=corr.loc[i, j])
-
-        if len(G.edges) == 0:
-            st.info(f"임계값 {threshold_net} 이상인 상관 없음.")
-        else:
-            pos = nx.spring_layout(G, seed=42)
-            edge_x, edge_y, edge_color = [], [], []
-            for u, v, d in G.edges(data=True):
-                x0, y0 = pos[u]
-                x1, y1 = pos[v]
-                edge_x += [x0, x1, None]
-                edge_y += [y0, y1, None]
-                color = "rgba(255,0,0,0.3)" if d["weight"] > 0 else "rgba(0,0,255,0.3)"
-                edge_color.append(color)
-
-            edge_trace = go.Scatter(x=edge_x, y=edge_y, mode="lines", line=dict(width=2, color="lightgray"))
-            node_x, node_y = zip(*[pos[n] for n in G.nodes()])
-            node_trace = go.Scatter(
-                x=node_x, y=node_y, mode="markers+text", text=list(G.nodes()),
-                textposition="top center", marker=dict(size=25, color="#90CAF9", line=dict(width=2, color="#1565C0"))
-            )
-            fig_net = go.Figure(data=[edge_trace, node_trace])
-            fig_net.update_layout(title=f"키워드 네트워크 (|r| ≥ {threshold_net})", **PLOTLY_STYLE)
-            st.plotly_chart(fig_net, use_container_width=True)
-
-        # 키워드 간 교차 상관 분석
-        st.divider()
-        st.subheader("🔬 키워드 간 교차 상관 분석 (Cross-Correlation)")
-        st.caption("두 키워드 검색량의 시간 지연(Lag)에 따른 상관관계를 분석하여 선행/후행 관계를 파악합니다.")
-
-        # 키워드 선택
-        kw_list = [c for c in df.columns if c != "date"]
-        col_ccf_select = st.columns(2)
-        with col_ccf_select[0]:
-            kw_a = st.selectbox("키워드 A (X축)", kw_list, index=0)
-        with col_ccf_select[1]:
-            # 기본적으로 A와 다른 키워드를 선택하도록 설정
-            default_index = 1 if len(kw_list) > 1 and kw_list[0] == kw_a else 0
-            kw_b = st.selectbox("키워드 B (Y축)", kw_list, index=default_index)
-
-        max_lag = st.slider("최대 지연 기간 (Lag, 일)", 7, min(30, len(df)//2 - 1), 14, 1)
-
-        if kw_a == kw_b:
-            st.warning("⚠️ 교차 상관 분석을 위해서는 서로 다른 두 키워드를 선택해야 합니다.")
-        else:
-            df_ccf = df.set_index("date").dropna()
-            try:
-                ccf_results = run_ccf_analysis(df_ccf[kw_a].values, df_ccf[kw_b].values, max_lags=max_lag)
-                
-                # Plotly 시각화
-                fig_ccf = go.Figure(data=[
-                    go.Bar(x=ccf_results['ccf_df']['Lag'], 
-                          y=ccf_results['ccf_df']['CCF'], 
-                          marker_color='#E91E63')
-                ])
-
-                fig_ccf.add_vline(x=ccf_results['optimal_lag'], 
-                                 line_width=2, 
-                                 line_dash="dash", 
-                                 line_color="#FFC107")
-                fig_ccf.add_hline(y=ccf_results['conf_level'], 
-                                 line_dash="dot", 
-                                 line_color="#4CAF50")
-                fig_ccf.add_hline(y=-ccf_results['conf_level'], 
-                                 line_dash="dot", 
-                                 line_color="#4CAF50")
-                
-                fig_ccf.update_layout(
-                    title=f"{kw_a} ↔ {kw_b} 교차 상관 함수 (CCF)",
-                    xaxis_title=f"지연 (Lag, 일) | +Lag: {kw_a}가 {kw_b}를 선행",
-                    yaxis_title="교차 상관 계수",
-                    **PLOTLY_STYLE,
-                )
-
-                st.plotly_chart(fig_ccf, use_container_width=True)
-
-                st.markdown("#### 🔍 분석 결과")
-                if abs(ccf_results['max_correlation']) > ccf_results['conf_level']:
-                    st.success(f"**최적 지연: {ccf_results['optimal_lag']}일** (상관 계수: {ccf_results['max_correlation']:.3f})")
-                    st.markdown(ccf_results['analysis_text'])
-                else:
-                    st.info("선택한 두 키워드 간에 통계적으로 유의미한 교차 상관 관계는 발견되지 않았습니다.")
-
-            except Exception as e:
-                st.error(f"CCF 분석 중 오류가 발생했습니다: {str(e)}")
+        render_correlation_ui(df, PLOTLY_STYLE)
 
     # --- 탭 4: 예측 ---
     with tab4:
@@ -355,43 +248,15 @@ if df is not None and not df.empty:
 
     # --- 탭 5: 모델 성능 비교 ---
     with tab5:
+        st.caption("예측 모델별 정확도(MAPE, RMSE)를 비교하여 최적 모델을 확인합니다.")
         st.subheader("📊 모델별 성능 비교 대시보드")
-
-        if "model_metrics" not in st.session_state or len(st.session_state["model_metrics"]) == 0:
-            st.info("아직 저장된 모델 성능 데이터가 없습니다. 예측을 먼저 실행하세요.")
-        else:
-            df_metrics = pd.DataFrame(st.session_state["model_metrics"])
-            
-            available_keywords = df_metrics["키워드"].unique()
-            try:
-                default_index = list(available_keywords).index(selected_kw)
-            except ValueError:
-                default_index = 0
-            selected_comparison_kw = st.selectbox("키워드 선택 (비교 대상)", available_keywords, index=default_index)
-
-            df_filtered = df_metrics[df_metrics["키워드"] == selected_comparison_kw]
-            st.dataframe(df_filtered, use_container_width=True)
-            
-            if not df_filtered.empty:
-                best_row = df_filtered.loc[df_filtered["RMSE"].idxmin()]
-                st.success(f"🏆 키워드 **'{selected_comparison_kw}'**에 대한 최적 모델: **{best_row['모델명']}** (RMSE {best_row['RMSE']:.4f})")
-
-                st.markdown("#### RMSE 비교")
-                fig_rmse = px.bar(df_filtered, x="모델명", y="RMSE", color="모델명",
-                                    text="RMSE", title=f"'{selected_comparison_kw}' 모델별 RMSE 비교", color_discrete_sequence=px.colors.qualitative.Set2)
-                fig_rmse.update_layout(**PLOTLY_STYLE)
-                st.plotly_chart(fig_rmse, use_container_width=True)
-
-                st.markdown("### MAPE 비교")
-                fig_mape = px.bar(df_filtered, x="모델명", y="MAPE(%)", color="모델명",
-                                    text="MAPE(%)", title=f"'{selected_comparison_kw}' 모델별 MAPE 비교", color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_mape.update_layout(**PLOTLY_STYLE)
-                st.plotly_chart(fig_mape, use_container_width=True)
-            else:
-                st.info(f"키워드 '{selected_comparison_kw}'에 대해 저장된 측정값이 없습니다. 예측을 실행하여 저장하세요.")
+        
+        df_metrics = pd.DataFrame(st.session_state.get("model_metrics", []))
+        render_metrics_comparison(df_metrics, selected_kw, PLOTLY_STYLE)
 
     # --- 탭 6: 다운로드 ---
     with tab6:
+        st.caption("검색 데이터 및 모델 성능 리포트를 다운로드할 수 있습니다.")
         st.subheader("⬇️ 데이터 및 리포트 다운로드")
 
         csv = df.to_csv(index=False).encode("utf-8-sig")
