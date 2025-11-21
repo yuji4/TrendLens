@@ -208,12 +208,4 @@ if __name__ == '__main__':
         if not df_loaded.empty:
             print("\n✅ 로드 성공. 로드된 데이터 구조 (상위 5개 행):")
             print(df_loaded.head().to_string(index=False))
-    '''
-        # 테스트 후 생성된 파일과 폴더 정리
-        try: 
-            os.remove(saved_path)
-            if os.path.exists('data_test') and not os.listdir('data_test'):
-                os.rmdir('data_test')
-        except OSError:
-            pass
-    '''
+

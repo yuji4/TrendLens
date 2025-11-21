@@ -170,15 +170,18 @@ if df is not None and not df.empty:
             st.dataframe(events, width='stretch')
 
             # 선택박스 만들기
-            event_key_list = events.apply(
+            max_change_indices = events.groupby('keyword')['change'].idxmax()
+            max_events = events.loc[max_change_indices]
+            event_key_list = max_events.apply(
                 lambda r: f"{r['keyword']} | +{r['change']}%",
                 axis=1
             )
             selected = st.selectbox("분석할 이벤트 선택", event_key_list)
 
             # 선택된 데이터 찾기
-            idx = event_key_list.tolist().index(selected)
-            ev = events.iloc[idx]
+            keyword_to_find = selected.split(' | ')[0].strip()
+            ev = max_events[max_events['keyword'] == keyword_to_find].iloc[0]
+
             keyword = ev["keyword"]
             change = ev["change"]
 
@@ -186,7 +189,10 @@ if df is not None and not df.empty:
 
             if st.button("📡 뉴스 수집 + AI 원인 분석 실행"):
                 with st.spinner("뉴스 수집 중..."):
-                    articles = fetch_news_articles(keyword,  max_articles=40)
+                    articles = fetch_news_articles(
+                        keyword, 
+                        max_articles=100 
+                    )
 
                 if len(articles) == 0:
                     st.warning("관련 뉴스가 부족해 AI 분석을 수행할 수 없습니다.")
@@ -197,6 +203,7 @@ if df is not None and not df.empty:
                     with st.spinner("AI가 급등 원인을 분석하는 중..."):
                         cause_text = analyze_news_articles(keyword, articles)
 
+                    st.warning("⚠️ **분석 결과 안내:** 네이버 API 정책상 과거 급등 시점의 뉴스를 수집할 수 없습니다. 따라서 아래 AI 분석은 **선택된 키워드의 급등 원인**이 아닌, **현재 시점에서 가장 최근 발행된 뉴스들**을 기반으로 해당 키워드가 어떻게 활용되고 있는지에 대한 **최신 논점을 요약**한 것입니다.")
                     st.markdown("### 🔥 급등 원인 분석 결과")
                     st.write(cause_text)
 
