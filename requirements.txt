@@ -12,4 +12,5 @@ statsmodels
 optuna
 reportlab
 kaleido
+scikit-learn
 openai>=1.52.0
