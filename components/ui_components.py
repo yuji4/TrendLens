@@ -4,7 +4,7 @@ from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, glob, os
 from analysis.api_manager import get_naver_trend_data  
-from analysis.data_manager import save_data_to_csv
+from analysis.data_manager import save_data_to_csv, clear_all_csv
 
 # ===============================
 # ⚙️ 사이드바 렌더링 함수
@@ -30,6 +30,19 @@ def render_sidebar():
             update_btn = st.button("🔄 업데이트", width='stretch')
         with colB:
             merge_btn = st.button("🗂 CSV 병합", width='stretch')
+       
+        st.markdown("### 🗑️ 데이터 초기화")
+        if st.button("❌ 모든 저장된 데이터 삭제", type="primary", width='stretch'):
+            try:
+                csv_files = glob.glob("data/*.csv")
+                for f in csv_files:
+                    os.remove(f)
+
+                if "model_metrics" in st.session_state:
+                    st.session_state["model_metrics"] = []
+                    st.success(f"🧹 데이터 초기화 완료! ({len(csv_files)}개 파일 삭제됨)")
+            except Exception as e:
+                st.error(f"삭제 중 오류 발생: {e}")
 
         st.divider()
         st.markdown("### 🕒 자동 수집 상태")

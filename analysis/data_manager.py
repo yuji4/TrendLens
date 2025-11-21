@@ -66,6 +66,14 @@ def save_data_to_csv(data: dict, folder_path: str = 'data', auto: bool= False) -
     
     return file_path
         
+def clear_all_csv():
+    csv_files = glob.glob("data/*.csv")
+    for file in csv_files:
+        try:
+            os.remove(file)
+        except Exception as e:
+            print(f"Error deleting {file}: {e}")
+    return len(csv_files)
 
 def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
     '''
