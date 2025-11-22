@@ -84,10 +84,17 @@ def render_prophet_seasonality(forecast):
     df_weekly = forecast[["ds", "weekly"]].tail(7).copy()
 
     day_names_kr = ['월', '화', '수', '목', '금', '토', '일']
-    df_weekly['day_name_kr'] = df_weekly['ds'].dt.day_name(locale='en').map({
-        'Monday': '월', 'Tuesday': '화', 'Wednesday': '수', 'Thursday': '목', 
-        'Friday': '금', 'Saturday': '토', 'Sunday': '일'
-    })
+    weekday_map = {
+        0: "월",
+        1: "화",
+        2: "수",
+        3: "목",
+        4: "금",
+        5: "토",
+        6: "일",
+    }
+
+    df_weekly["day_name_kr"] = df_weekly["ds"].dt.weekday.map(weekday_map)
     df_weekly['day_name_kr'] = pd.Categorical(df_weekly['day_name_kr'], categories=day_names_kr, ordered=True)
     df_weekly = df_weekly.sort_values('day_name_kr')
 

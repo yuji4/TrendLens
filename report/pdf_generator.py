@@ -2,13 +2,21 @@ import os
 from datetime import datetime
 from io import BytesIO
 import pandas as pd
-import plotly.express as px
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+import matplotlib
+matplotlib.use("Agg")  
+import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+plt.rc('font', family='Malgun Gothic') 
+plt.rc('axes', unicode_minus=False)
 
 def generate_trend_report(
     df, 
@@ -31,17 +39,25 @@ def generate_trend_report(
     try:
         # 트렌드 차트 생성
         df_vis_report = df.copy()
-        df_long_report = df_vis_report.melt(id_vars="date", var_name="keyword", value_name="ratio")
-        fig_report = px.line(
-            df_long_report, x="date", y="ratio", color="keyword", markers=True, 
-            title="키워드별 트렌드 변화 (Trend Comparison)",
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-        fig_report.update_layout(
-            paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"),
-            margin=dict(l=40, r=30, t=60, b=40), legend=dict(orientation="h", y=-0.2)
-        )
-        fig_report.write_image(image_path, scale=2, engine="kaleido")
+        df_vis_report["date"] = pd.to_datetime(df_vis_report["date"])
+
+        value_cols = [c for c in df_vis_report.columns if c != "date"]
+
+        plt.figure(figsize=(10, 5))
+        for col in value_cols:
+            plt.plot(df_vis_report["date"], df_vis_report[col], marker="o", label=col)
+
+
+        plt.title("키워드별 트렌드 변화")  
+        plt.xlabel("Date")
+        plt.ylabel("Search Ratio")
+        plt.legend(loc="upper left")
+        plt.grid(True)
+        plt.tight_layout()
+
+        plt.savefig(image_path, dpi=200)
+        plt.close()
+
 
         # PDF 생성
         buffer = BytesIO()
