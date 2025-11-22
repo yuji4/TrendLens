@@ -4,13 +4,24 @@ from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, glob, os
 from analysis.api_manager import get_naver_trend_data  
-from analysis.data_manager import save_data_to_csv, clear_all_csv
+from analysis.data_manager import save_data_to_csv
 
 # ===============================
 # ⚙️ 사이드바 렌더링 함수
 # ===============================
-def render_sidebar():
+def render_sidebar(user_dir):
     with st.sidebar:
+        # --- 계정 영역 ---
+        st.markdown("### 👤 계정")
+
+        username = st.session_state.get("username", "Unknown")
+
+        if st.button(f"내 계정 관리 ({username})"):
+            st.session_state["page"] = "account"
+            st.rerun()
+
+        st.divider()
+
         st.markdown("### ⚙️ 기본 설정")
         raw_keywords = st.text_input("검색어 입력 (쉼표로 구분)", "봄, 여름, 가을, 겨울")
         time_unit = st.selectbox("데이터 단위", ["date", "week", "month"])
@@ -30,19 +41,6 @@ def render_sidebar():
             update_btn = st.button("🔄 업데이트", width='stretch')
         with colB:
             merge_btn = st.button("🗂 CSV 병합", width='stretch')
-       
-        st.markdown("### 🗑️ 데이터 초기화")
-        if st.button("❌ 모든 저장된 데이터 삭제", type="primary", width='stretch'):
-            try:
-                csv_files = glob.glob("data/*.csv")
-                for f in csv_files:
-                    os.remove(f)
-
-                if "model_metrics" in st.session_state:
-                    st.session_state["model_metrics"] = []
-                    st.success(f"🧹 데이터 초기화 완료! ({len(csv_files)}개 파일 삭제됨)")
-            except Exception as e:
-                st.error(f"삭제 중 오류 발생: {e}")
 
         st.divider()
         st.markdown("### 🕒 자동 수집 상태")
@@ -52,7 +50,7 @@ def render_sidebar():
             st.info("자동 수집 기록이 없습니다.")
 
         st.markdown("#### 📈 최근 자동 수집 로그")
-        csv_files = sorted(glob.glob("data/trend_data_*.csv"), key=os.path.getctime, reverse=True) if os.path.exists("data") else []
+        csv_files = sorted(glob.glob(f"{user_dir}/trend_data_*.csv"), key=os.path.getctime, reverse=True) if os.path.exists(user_dir) else []
         log_df = pd.DataFrame([
             {"파일": os.path.basename(f), "생성시각": datetime.fromtimestamp(os.path.getctime(f))}
             for f in csv_files
@@ -86,7 +84,10 @@ def setup_scheduler():
                 today = date.today()
                 start = today - timedelta(days=7)
                 
-                # ✅ 함수 직접 호출로 변경
+
+                auto_dir = "data/_auto_update"
+                os.makedirs(auto_dir, exist_ok=True)
+
                 data = get_naver_trend_data(
                     keywords=keywords,
                     start_date=str(start),
@@ -95,7 +96,7 @@ def setup_scheduler():
                 )
                 
                 if data and "results" in data:
-                    file_path = save_data_to_csv(data, auto=True)
+                    file_path = save_data_to_csv(data, user_dir=auto_dir, auto=True)
                     print(f"✅ [자동 수집 완료] {file_path} @ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 else:
                     print("⚠️ [자동 수집 실패] 응답 없음")

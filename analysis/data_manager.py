@@ -4,12 +4,12 @@ import glob
 from datetime import datetime
 import re
 
-def save_data_to_csv(data: dict, folder_path: str = 'data', auto: bool= False) -> str:
+def save_data_to_csv(data: dict, user_dir: str, auto: bool= False) -> str:
     '''
     네이버 API 응답 JSON을 DataFrame으로 변환 후 타임스탬프를 붙여 CSV로 저장
     DataFrame은 날짜(index)별로 키워드별 검색 비율을 컬럼으로 갖는 피벗 형식
     '''
-    os.makedirs(folder_path, exist_ok=True)
+    os.makedirs(user_dir, exist_ok=True)
 
     if not data or 'results' not in data or not data['results']:
         print("ERROR: 유효하지 않거나 비어 있는 데이터입니다. 저장 건너뜀.")
@@ -19,7 +19,7 @@ def save_data_to_csv(data: dict, folder_path: str = 'data', auto: bool= False) -
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = "auto_trend" if auto else "trend_data"
     file_name = f"{prefix}_{timestamp}.csv"
-    file_path = os.path.join(folder_path, file_name)
+    file_path = os.path.join(user_dir, file_name)
 
     # 유효성 검사
     if not data or 'results' not in data:
@@ -66,8 +66,8 @@ def save_data_to_csv(data: dict, folder_path: str = 'data', auto: bool= False) -
     
     return file_path
         
-def clear_all_csv():
-    csv_files = glob.glob("data/*.csv")
+def clear_all_csv(user_dir: str):
+    csv_files = glob.glob(f"{user_dir}/*.csv")
     for file in csv_files:
         try:
             os.remove(file)
@@ -75,13 +75,13 @@ def clear_all_csv():
             print(f"Error deleting {file}: {e}")
     return len(csv_files)
 
-def load_latest_csv(folder_path: str = 'data') -> pd.DataFrame:
+def load_latest_csv(user_dir: str) -> pd.DataFrame:
     '''
     저장된 폴더에서 가장 최근에 저장된 CSV 파일을 DateFrame으로 로드
     '''
 
     # 폴더 내 모든 'trend_data_*.csv' 패턴 파일 검색
-    search_pattern = os.path.join(folder_path, "trend_data_*.csv")
+    search_pattern = os.path.join(user_dir, "trend_data_*.csv")
     list_of_files = glob.glob(search_pattern)
 
     if not list_of_files:
@@ -113,12 +113,12 @@ def collapse_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def merge_all_csv(folder_path: str = 'data') -> pd.DataFrame:
+def merge_all_csv(user_dir: str) -> pd.DataFrame:
     '''
     폴더 내의 trend_data_*.csv 파일을 모두 병합하여 하나의 DataFrame으로 반환
     중복된 날짜는 평균값으로 처리, 동일 키워드는 평균 후 1개만 유지
     '''
-    search_pattern = os.path.join(folder_path, "trend_data_*.csv")
+    search_pattern = os.path.join(user_dir, "trend_data_*.csv")
     file_list = glob.glob(search_pattern)
 
     if not file_list:
@@ -208,11 +208,11 @@ if __name__ == '__main__':
     }
 
     # 1. 저장 테스트
-    saved_path = save_data_to_csv(dummy_data, folder_path='data_test')
+    saved_path = save_data_to_csv(dummy_data, user_dir='data_test')
 
     # 2. 로드 테스트
     if saved_path:
-        df_loaded = load_latest_csv(folder_path='data_test')
+        df_loaded = load_latest_csv(user_dir='data_test')
         if not df_loaded.empty:
             print("\n✅ 로드 성공. 로드된 데이터 구조 (상위 5개 행):")
             print(df_loaded.head().to_string(index=False))

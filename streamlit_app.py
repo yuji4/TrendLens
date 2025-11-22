@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime
 import warnings
+import os
 
 warnings.filterwarnings("ignore")
 
@@ -12,8 +12,6 @@ warnings.filterwarnings("ignore")
 # ===============================
 from analysis.api_manager import get_naver_trend_data
 from analysis.data_manager import save_data_to_csv, load_latest_csv, merge_all_csv
-from analysis.modeling import run_ccf_analysis
-from components.ui_components import render_sidebar, setup_scheduler
 from report.pdf_generator import generate_trend_report
 from analysis.trend_events import detect_surge_events
 from analysis.news_fetcher import fetch_news_articles
@@ -21,6 +19,33 @@ from analysis.ai.ai_cause_analysis import analyze_news_articles
 from ui.model_ui import render_prophet_ui, render_arima_ui, render_random_forest_ui, render_model_info
 from ui.metrics_ui import render_metrics_comparison
 from ui.correlation_ui import render_correlation_ui
+from ui.account_page import render_account_page
+from components.ui_components import render_sidebar, setup_scheduler
+
+# 인증 모듈 
+from auth.login_page import render_auth_page
+from auth.auth_manager import delete_user, init_db
+
+
+# ===============================
+# 초기 설정
+# ===============================
+st.set_page_config(page_title="TrendLens - 네이버 트렌드 분석", layout="wide")
+init_db() 
+
+
+# 📌 1) 로그인 체크 — 로그인 안 했으면 바로 로그인 페이지로
+if not st.session_state.get("logged_in", False):
+    logged_in = render_auth_page()
+    if not logged_in:
+        st.stop() 
+
+# 📌 로그인 성공 상태라면 username 확보
+username = st.session_state["username"]
+user_dir = f"data/{username}"
+
+# 사용자 데이터 폴더 생성
+os.makedirs(user_dir, exist_ok=True)  
 
 
 # ===============================
@@ -73,7 +98,7 @@ st.title("👀 TrendLens: 네이버 검색 트렌드 분석")
 # ===============================s
 # ⚙️ 사이드바 렌더링 및 설정 값 로드
 # ===============================
-keywords, time_unit, start_date, end_date, align_option, update_btn, merge_btn = render_sidebar()
+keywords, time_unit, start_date, end_date, align_option, update_btn, merge_btn = render_sidebar(user_dir)
 
 if not keywords:
     st.warning("검색어를 1개 이상 입력하세요.")
@@ -102,16 +127,16 @@ if update_btn:
             if not data or "results" not in data:
                 st.error("선택한 조건에 데이터가 없습니다.")
             else:
-                file_path = save_data_to_csv(data)
+                file_path = save_data_to_csv(data, user_dir=user_dir)
                 st.success(f"✅ 최신 데이터 저장 완료: {file_path}")
-                df = load_latest_csv() 
+                df = load_latest_csv(user_dir=user_dir) 
         except Exception as e:
             st.error(f"데이터 수집 중 오류: {e}")
 
-df = load_latest_csv() if df is None else df
+df = load_latest_csv(user_dir=user_dir) if df is None else df
 
 if merge_btn:
-    merged = merge_all_csv()
+    merged = merge_all_csv(user_dir=user_dir)
     if merged.empty:
         st.warning("병합할 CSV 파일이 없습니다.")
     else:
@@ -123,6 +148,11 @@ if df is not None and not df.empty:
     df = df.sort_values("date")
     if align_option == "공통 날짜":
         df = df.dropna(subset=[c for c in df.columns if c != "date"])
+
+# 라우팅 처리
+if st.session_state.get("page") == "account":
+    render_account_page(username, user_dir)
+    st.stop()
 
 
 # ===============================
