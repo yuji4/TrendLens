@@ -8,6 +8,32 @@ Prophet / ARIMA / RandomForest 기반의 예측 모델을 사용해 미래 검�
 
 ### 🔗 Live Demo  
 **https://trendlens-analysis.streamlit.app/**
+---
+
+# 📚 목차 (Table of Contents)
+
+* [👀 TrendLens – 네이버 검색 트렌드 자동 분석 시스템](#-trendlens--네이버-검색-트렌드-자동-분석-시스템)
+* [⚙ 설치 및 실행](#-설치-및-실행)
+  * [1) 프로젝트 다운로드](#1-프로젝트-다운로드)
+  * [2) 패키지 설치](#2-패키지-설치)
+  * [3) Streamlit 실행](#3-streamlit-실행)
+* [🔑 API 키 설정](#-api-키-설정-필수-3종)
+* [🚀 전체 기능](#-전체-기능)
+* [🧩 상세 기능 설명 + 데모](#-상세-기능-설명--데모)
+  * [1) 네이버 검색 데이터 자동 수집](#-1-네이버-검색-데이터-자동-수집)
+  * [2) CSV 저장 · 병합 · 자동 로드](#-2-csv-저장--병합--자동-로드)
+  * [3) 트렌드 비교 (Tab 1)](#-3-트렌드-비교-tab-1)
+  * [4) 급등(Surge) 이벤트 자동 감지 (Tab 2)](#-4-급등surge-이벤트-자동-감지-tab-2)
+  * [5) 뉴스 수집 + AI 기반 급등 원인 분석](#-5-뉴스-수집--ai-기반-급등-원인-분석-tab-2)
+  * [6) 상관 분석 (Tab 3)](#-6-상관-분석-tab-3)
+  * [7) 검색 트렌드 예측 (Tab 4)](#-7-검색-트렌드-예측-tab-4)
+  * [8) 모델 성능 비교 (Tab 5)](#-8-모델-성능-비교-tab-5)
+  * [9) PDF 자동 리포트 생성 (Tab 6)](#-9-pdf-자동-리포트-생성-tab-6)
+  * [10) 계정 관리 기능](#-10-계정-관리-기능)
+  * [11) 자동 데이터 수집 스케줄러](#-11-자동-데이터-수집-스케줄러)
+* [⚠ AI 기능의 한계](#-ai-기능의-한계)
+* [🛠 기술 스택](#-기술-스택)
+* [📄 라이선스](#-라이선스)
 
 ---
 
@@ -87,7 +113,7 @@ NAVER_NEWS_CLIENT_SECRET=여기에_네이버_뉴스_API_클라이언트_SECRET
 * 사용자별 디렉토리에 CSV 자동 저장
 * 최신 CSV 자동 로딩
 
-<p align="center"> <img src="images/image.png" width="650"> <br> <em>데이터 수집 UI 화면</em> </p>
+<p align="center"> <img src="images/image.png" width="450"> <br> <em>데이터 수집 UI 화면</em> </p>
 
 ---
 
@@ -112,7 +138,7 @@ NAVER_NEWS_CLIENT_SECRET=여기에_네이버_뉴스_API_클라이언트_SECRET
 * 가장 최근 저장 파일 자동 선택
 * 업데이트 이후 즉시 사용 가능
 
-<p align="center"> <img src="images/image-1.png" width="650"> <br> <em>CSV 병합 UI 화면</em> </p>
+<p align="center"> <img src="images/image-1.png" width="450"> <br> <em>CSV 병합 UI 화면</em> </p>
 
 ---
 
@@ -128,7 +154,7 @@ Plotly 기반 시각적 분석 도구를 통해 검색량 변화 패턴을 직�
 * 전체 dataset 테이블 표시
 * Marker / Grid 적용으로 가독성 강화
 
-<p align="center"> <img src="images/image-2.png" width="650"> <br> <em>키워드별 트렌드 비교 그래프</em> </p>
+<p align="center"> <img src="images/image-2.png" width="450"> <br> <em>키워드별 트렌드 비교 그래프</em> </p>
 
 ---
 
@@ -143,7 +169,7 @@ Plotly 기반 시각적 분석 도구를 통해 검색량 변화 패턴을 직�
 * 각 키워드별 “최대 급등 발생일자” 자동 선택
 * 감지된 이벤트를 표 형태로 표시
 
-<p align="center"> <img src="images/image-3.png" width="650"> <br> <em>급등 이벤트 감지 테이블</em> </p>
+<p align="center"> <img src="images/image-3.png" width="450"> <br> <em>급등 이벤트 감지 테이블</em> </p>
 
 ---
 
@@ -161,7 +187,7 @@ Plotly 기반 시각적 분석 도구를 통해 검색량 변화 패턴을 직�
 > ※ 네이버 뉴스 API 특성상 **과거 뉴스 수집 불가** →
 > 따라서 “급등 원인 추정”이 아닌 “해당 키워드의 최신 동향 요약”을 제공합니다.
 
-<p align="center"> <img src="images/image-4.png" width="650"> <br> <em>급등 분석 키워드 선택 화면</em> </p> <br> <p align="center"> <img src="images/image-5.png" width="650"> <br> <em>AI 분석 결과 및 뉴스 리스트</em> </p>
+<p align="center"> <img src="images/image-4.png" width="450"> <br> <em>급등 분석 키워드 선택 화면</em> </p> <br> <p align="center"> <img src="images/image-5.png" width="450"> <br> <em>AI 분석 결과 및 뉴스 리스트</em> </p>
 
 ---
 
@@ -175,7 +201,7 @@ Plotly 기반 시각적 분석 도구를 통해 검색량 변화 패턴을 직�
 * 상관 행렬 Heatmap 시각화
 * 키워드 간 유사도 Network Graph 제공
 
-<p align="center"> <img src="images/image-6.png" width="650"> <br> <em>키워드 상관관계 Heatmap</em> </p> <br> <p align="center"> <img src="images/image-7.png" width="650"> <br> <em>키워드 네트워크 그래프</em> </p> <br> <p align="center"> <img src="images/image-8.png" width="650"> <br> <em>교차 상관(CCF) 분석</em> </p>
+<p align="center"> <img src="images/image-6.png" width="450"> <br> <em>키워드 상관관계 Heatmap</em> </p> <br> <p align="center"> <img src="images/image-7.png" width="450"> <br> <em>키워드 네트워크 그래프</em> </p> <br> <p align="center"> <img src="images/image-8.png" width="450"> <br> <em>교차 상관(CCF) 분석</em> </p>
 ---
 
 ## 🔮 7) 검색 트렌드 예측 (Tab 4)
@@ -196,7 +222,7 @@ Plotly 기반 시각적 분석 도구를 통해 검색량 변화 패턴을 직�
 * 예측값 테이블 출력
 * 모델 상세 설명 Tooltip 제공
 
-<p align="center"> <img src="images/image-9.png" width="650"> <br> <em>Prophet 예측 차트</em> </p> <br> <p align="center"> <img src="images/image-10.png" width="650"> <br> <em>Prophet 계절성 분석</em> </p> <br> <p align="center"> <img src="images/image-11.png" width="650"> <br> <em>ARIMA 예측 차트</em> </p> <br> <p align="center"> <img src="images/image-12.png" width="650"> <br> <em>Random Forest 예측 UI</em> </p> <br> <p align="center"> <img src="images/image-13.png" width="650"> <br> <em>Random Forest 예측 차트</em> </p> <br> <p align="center"> <img src="images/image-14.png" width="650"> <br> <em>Random Forest 피처 중요도 분석</em> </p>
+<p align="center"> <img src="images/image-9.png" width="450"> <br> <em>Prophet 예측 차트</em> </p> <br> <p align="center"> <img src="images/image-10.png" width="450"> <br> <em>Prophet 계절성 분석</em> </p> <br> <p align="center"> <img src="images/image-11.png" width="450"> <br> <em>ARIMA 예측 차트</em> </p> <br> <p align="center"> <img src="images/image-12.png" width="450"> <br> <em>Random Forest 예측 UI</em> </p> <br> <p align="center"> <img src="images/image-13.png" width="450"> <br> <em>Random Forest 예측 차트</em> </p> <br> <p align="center"> <img src="images/image-14.png" width="450"> <br> <em>Random Forest 피처 중요도 분석</em> </p>
 
 ---
 
@@ -219,7 +245,7 @@ Plotly 기반 시각적 분석 도구를 통해 검색량 변화 패턴을 직�
 * 막대 그래프 기반 비교 차트
 * 키워드별 최적 모델 자동 식별
 
-<p align="center"> <img src="images/image-15.png" width="650"> <br> <em>모델별 성능 비교 대시보드</em> </p> <br> <p align="center"> <img src="images/image-16.png" width="650"> <br> <em>RMSE 비교 차트</em> </p>
+<p align="center"> <img src="images/image-15.png" width="450"> <br> <em>모델별 성능 비교 대시보드</em> </p> <br> <p align="center"> <img src="images/image-16.png" width="450"> <br> <em>RMSE 비교 차트</em> </p>
 
 ---
 
@@ -260,7 +286,7 @@ TrendLens는 분석된 검색 트렌드를 PDF 문서로 자동 생성하여 다
 * 페이지 여백이 부족할 시 자동 페이지 넘어감 (`showPage()`)
 * 임시 이미지 파일 자동 삭제 처리
 
-<p align="center"> <img src="images/image-17.png" width="650"> <br> <em>데이터 및 리포트 다운로드 화면</em> </p> <br> <p align="center"> <img src="images/image-18.png" width="650"> <br> <em>PDF 분석 리포트 예시</em> </p>
+<p align="center"> <img src="images/image-17.png" width="450"> <br> <em>데이터 및 리포트 다운로드 화면</em> </p> <br> <p align="center"> <img src="images/image-18.png" width="450"> <br> <em>PDF 분석 리포트 예시</em> </p>
 
 ---
 
@@ -276,7 +302,7 @@ TrendLens는 분석된 검색 트렌드를 PDF 문서로 자동 생성하여 다
 * 회원탈퇴(계정 + 데이터 폴더 완전 삭제)
 * 메인 페이지 복귀 버튼
 
-<p align="center"> <img src="images/image-19.png" width="650"> <br> <em>계정 관리 페이지 UI</em> </p>
+<p align="center"> <img src="images/image-19.png" width="450"> <br> <em>계정 관리 페이지 UI</em> </p>
 
 ---
 
@@ -290,7 +316,7 @@ APScheduler 기반 자동 크롤링 기능 제공합니다.
 * 자동 수집된 CSV 파일 자동 저장
 * 사이드바에서 최근 수집 기록 확인 가능
 
-<p align="center"> <img src="images/image-20.png" width="650"> <br> <em>자동 데이터 수집 상태 UI</em> </p>
+<p align="center"> <img src="images/image-20.png" width="450"> <br> <em>자동 데이터 수집 상태 UI</em> </p>
 
 ---
 
@@ -333,5 +359,6 @@ APScheduler 기반 자동 크롤링 기능 제공합니다.
 # 📄 라이선스
 
 **MIT License**
+
 
 
