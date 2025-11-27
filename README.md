@@ -8,6 +8,7 @@ Prophet / ARIMA / RandomForest 기반의 예측 모델을 사용해 미래 검�
 
 ### 🔗 Live Demo  
 **https://trendlens-analysis.streamlit.app/**
+
 ---
 
 # 📚 목차 (Table of Contents)
@@ -359,6 +360,7 @@ APScheduler 기반 자동 크롤링 기능 제공합니다.
 # 📄 라이선스
 
 **MIT License**
+
 
 
 
