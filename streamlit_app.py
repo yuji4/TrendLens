@@ -23,8 +23,8 @@ from ui.account_page import render_account_page
 from components.ui_components import render_sidebar, setup_scheduler
 
 # 인증 모듈 
-from auth.login_page import render_auth_page
-from auth.auth_manager import delete_user, init_db
+from ui.login_page import render_auth_page
+from auth.auth_manager import init_db
 
 
 # ===============================
